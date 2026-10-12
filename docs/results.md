@@ -59,15 +59,18 @@ conversational 0.83, irrelevant 0.70.
 | Pairs "shorter but more removable", ranked right: filler map / length / Yap / stop words | 0.96 / 0 / 0.47 / 0.63 | 0.83 / 0 / 0.12 / 0.76 | 0.34 / 0 / 0.09 / 0.49 |
 | Partial Spearman given length, filler map | +0.93 [0.86, 0.98] | +0.77 [0.69, 0.83] | +0.25 [0.00, 0.53] |
 
-Planted responses by dataset, Spearman with the true share (`scripts/readme_figure.py`, the chart in the README):
+By dataset (`scripts/readme_figure.py`, the chart in the README). Pairwise accuracy: over pairs of responses whose
+true shares differ by ≥ 0.2, the share where the metric scores the response with more filler higher (ties count
+half; 50% = chance). Fragment ROC-AUC: the filler map's decisions per fragment, filler or wrong vs needed.
 
-| Dataset | Responses | Filler map | Length | Yap excess | Stop-word share |
-|---|---|---|---|---|---|
-| Synthetic reports | 96 | 0.95 | 0.63 | 0.75 | 0.07 |
-| SQuAD 2.0 | 66 | 0.65 | 0.03 | 0.06 | 0.35 |
-| MuSiQue | 89 | 0.79 | 0.18 | 0.41 | 0.51 |
-| CUAD | 68 | 0.70 | −0.05 | −0.02 | 0.22 |
-| Poddar et al. | 36 | 0.66 | 0.79 | 0.77 | 0.42 |
+| Dataset | Responses | Pairs | Filler map | Length | Yap excess | Stop-word share | Filler map, fragment ROC-AUC |
+|---|---|---|---|---|---|---|---|
+| Synthetic reports, planted | 96 | 2380 | 99% | 88% | 94% | 51% | 0.98 |
+| SQuAD 2.0, planted | 66 | 1141 | 86% | 51% | 53% | 68% | 0.86 |
+| MuSiQue, planted | 89 | 2355 | 89% | 58% | 69% | 76% | 0.79 |
+| CUAD, planted | 68 | 1467 | 84% | 46% | 47% | 60% | 0.88 |
+| Poddar et al., planted | 36 | 349 | 84% | 95% | 94% | 69% | 0.99 |
+| Poddar et al., human labels | 111 | 3639 | 88% | 92% | 92% | 58% | 0.84 |
 
 On human labels the result depends on the responses from which the reader reads nothing:
 

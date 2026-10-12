@@ -25,21 +25,26 @@ flowchart LR
 
 ## Filler map vs simple metrics
 
-![Spearman correlation with the true filler share, per dataset](docs/img/filler_vs_baselines.png)
+![Pairs of responses ranked correctly by filler, per dataset](docs/img/filler_vs_baselines.png)
 
-Each bar: Spearman correlation between a metric's score of a response and the true share of filler in it, over the
-responses of one dataset. 1 means the metric orders the responses exactly by their filler, 0 means no relation.
+Metric: pairwise accuracy. Take two responses from one dataset whose true filler shares differ by at least 20
+percentage points. A metric is right if it gives the response with more filler the higher score; a tie counts half.
+50% is a coin flip, 100% is always right. With a two-class truth this is ROC-AUC.
 
 The responses have known filler. They consist of sentences that state the requested facts (templated on synthetic
 reports, taken from the source text on real texts) and planted filler: openers, closings, hedges, generic remarks,
 restated requests, true but unrequested sentences, summaries. On real texts one condition also plants a wrong
 statement, which counts as removable. Development runs, reader Qwen2.5-3B, v1.0.0 scores.
 
-- The filler map stays at 0.65 or above on every dataset; each simple metric fails on at least one.
-- Length tracks filler on synthetic reports and on Poddar et al., but not on SQuAD 2.0, MuSiQue and CUAD (−0.05 to
-  0.18).
-- Not in the chart: answers of 10 LLMs labelled by people (Poddar et al.). There the filler map does not beat length
-  yet (0.70 vs 0.75); the human labels of the confirmation run decide it ([docs/results.md](docs/results.md)).
+- The filler map is right in 84–99% of pairs on every dataset.
+- Length works only where the fact sentences are short, so filler is what makes a response long: synthetic reports
+  (median 32 characters) and Poddar et al. (88). On SQuAD 2.0, MuSiQue and CUAD (131–142) it is close to a coin
+  flip (46–58%).
+- Per fragment (is this fragment filler?) the filler map's ROC-AUC is 0.98 on synthetic reports and 0.79–0.99 on
+  real texts. The simple metrics give one number per response and have no per-fragment score.
+- Not in the chart: answers of 10 LLMs labelled by people (Poddar et al.). There the filler map is right in 88% of
+  pairs and length in 92%: no advantage yet. The human labels of the confirmation run decide it
+  ([docs/results.md](docs/results.md)).
 
 The chart is rebuilt by `python scripts/readme_figure.py`.
 
