@@ -1,0 +1,198 @@
+{
+ "reader": "Qwen/Qwen2.5-3B-Instruct",
+ "max_prior": 0.05,
+ "min_gold_p": 0.5,
+ "n_per_cell": 15,
+ "scoring": "7",
+ "cells": {
+  "squad2:0": {
+   "pool": 60,
+   "checked": 0,
+   "known": 0,
+   "unreadable": 0,
+   "kept": 15,
+   "kept_before": 15,
+   "wanted": 15
+  },
+  "squad2:1": {
+   "pool": 60,
+   "checked": 0,
+   "known": 0,
+   "unreadable": 0,
+   "kept": 15,
+   "kept_before": 15,
+   "wanted": 15
+  },
+  "squad2:2": {
+   "pool": 60,
+   "checked": 0,
+   "known": 0,
+   "unreadable": 0,
+   "kept": 15,
+   "kept_before": 15,
+   "wanted": 15
+  },
+  "squad2:3": {
+   "pool": 60,
+   "checked": 0,
+   "known": 0,
+   "unreadable": 0,
+   "kept": 15,
+   "kept_before": 15,
+   "wanted": 15
+  },
+  "squad2:4": {
+   "pool": 60,
+   "checked": 0,
+   "known": 0,
+   "unreadable": 0,
+   "kept": 15,
+   "kept_before": 15,
+   "wanted": 15
+  },
+  "squad2:5": {
+   "pool": 60,
+   "checked": 0,
+   "known": 0,
+   "unreadable": 0,
+   "kept": 15,
+   "kept_before": 15,
+   "wanted": 15
+  },
+  "musique:0": {
+   "pool": 60,
+   "checked": 0,
+   "known": 0,
+   "unreadable": 0,
+   "kept": 15,
+   "kept_before": 15,
+   "wanted": 15
+  },
+  "musique:1": {
+   "pool": 60,
+   "checked": 0,
+   "known": 0,
+   "unreadable": 0,
+   "kept": 15,
+   "kept_before": 15,
+   "wanted": 15
+  },
+  "musique:2": {
+   "pool": 60,
+   "checked": 0,
+   "known": 0,
+   "unreadable": 0,
+   "kept": 15,
+   "kept_before": 15,
+   "wanted": 15
+  },
+  "musique:3": {
+   "pool": 60,
+   "checked": 0,
+   "known": 0,
+   "unreadable": 0,
+   "kept": 15,
+   "kept_before": 15,
+   "wanted": 15
+  },
+  "musique:4": {
+   "pool": 60,
+   "checked": 0,
+   "known": 0,
+   "unreadable": 0,
+   "kept": 15,
+   "kept_before": 15,
+   "wanted": 15
+  },
+  "musique:5": {
+   "pool": 60,
+   "checked": 0,
+   "known": 0,
+   "unreadable": 0,
+   "kept": 15,
+   "kept_before": 15,
+   "wanted": 15
+  },
+  "musique:6": {
+   "pool": 60,
+   "checked": 0,
+   "known": 0,
+   "unreadable": 0,
+   "kept": 15,
+   "kept_before": 15,
+   "wanted": 15
+  },
+  "cuad:0": {
+   "pool": 60,
+   "checked": 0,
+   "known": 0,
+   "unreadable": 0,
+   "kept": 15,
+   "kept_before": 15,
+   "wanted": 15
+  },
+  "cuad:1": {
+   "pool": 60,
+   "checked": 0,
+   "known": 0,
+   "unreadable": 0,
+   "kept": 15,
+   "kept_before": 15,
+   "wanted": 15
+  },
+  "cuad:2": {
+   "pool": 60,
+   "checked": 0,
+   "known": 0,
+   "unreadable": 0,
+   "kept": 15,
+   "kept_before": 15,
+   "wanted": 15
+  },
+  "cuad:3": {
+   "pool": 60,
+   "checked": 0,
+   "known": 0,
+   "unreadable": 0,
+   "kept": 15,
+   "kept_before": 15,
+   "wanted": 15
+  },
+  "cuad:4": {
+   "pool": 60,
+   "checked": 0,
+   "known": 0,
+   "unreadable": 0,
+   "kept": 15,
+   "kept_before": 15,
+   "wanted": 15
+  },
+  "poddar:0": {
+   "pool": 59,
+   "checked": 0,
+   "known": 0,
+   "unreadable": 0,
+   "kept": 15,
+   "kept_before": 15,
+   "wanted": 15
+  },
+  "poddar:1": {
+   "pool": 60,
+   "checked": 0,
+   "known": 0,
+   "unreadable": 0,
+   "kept": 15,
+   "kept_before": 15,
+   "wanted": 15
+  },
+  "poddar:2": {
+   "pool": 17,
+   "checked": 5,
+   "known": 0,
+   "unreadable": 5,
+   "kept": 12,
+   "kept_before": 12,
+   "wanted": 15
+  }
+ }
+}

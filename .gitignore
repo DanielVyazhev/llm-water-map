@@ -1,0 +1,7 @@
+__pycache__/
+*.egg-info/
+.pytest_cache/
+runs/
+assets/
+results/pilot_v0_run1/
+results/*.log

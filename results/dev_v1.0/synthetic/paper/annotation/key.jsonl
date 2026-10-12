@@ -1,0 +1,180 @@
+{"uid": "r001", "model": "smollm2-1.7b", "variant": "default", "item_id": "c14-0019", "kinds_main": ["kept", "kept"], "kinds_phi3.5-mini": ["kept", "kept"]}
+{"uid": "r002", "model": "qwen2.5-0.5b", "variant": "default", "item_id": "c08-0015", "kinds_main": ["kept", "kept", "kept", "kept", "kept", "kept"], "kinds_phi3.5-mini": ["kept", "kept", "kept", "kept", "kept", "kept"]}
+{"uid": "r003", "model": "smollm2-1.7b", "variant": "concise", "item_id": "c01-0006", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r004", "model": "qwen2.5-1.5b", "variant": "concise", "item_id": "c06-0012", "kinds_main": ["kept", "kept", "kept", "kept"], "kinds_phi3.5-mini": ["kept", "kept", "kept", "kept"]}
+{"uid": "r005", "model": "qwen2.5-0.5b", "variant": "default", "item_id": "c05-0018", "kinds_main": ["kept", "kept"], "kinds_phi3.5-mini": ["kept", "kept"]}
+{"uid": "r006", "model": "smollm2-1.7b", "variant": "default", "item_id": "c08-0007", "kinds_main": ["kept", "kept", "kept", "kept", "kept", "kept"], "kinds_phi3.5-mini": ["kept", "kept", "kept", "kept", "kept", "kept"]}
+{"uid": "r007", "model": "qwen2.5-0.5b", "variant": "default", "item_id": "c01-0014", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r008", "model": "qwen2.5-0.5b", "variant": "concise", "item_id": "c13-0000", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r009", "model": "qwen2.5-1.5b", "variant": "default", "item_id": "c11-0013", "kinds_main": ["uninformative", "uninformative", "kept", "kept"], "kinds_phi3.5-mini": ["duplicate", "kept", "kept", "kept"]}
+{"uid": "r010", "model": "smollm2-1.7b", "variant": "default", "item_id": "c13-0003", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r011", "model": "qwen2.5-1.5b", "variant": "concise", "item_id": "c14-0015", "kinds_main": ["kept", "kept", "uninformative"], "kinds_phi3.5-mini": ["kept", "kept", "duplicate"]}
+{"uid": "r012", "model": "smollm2-1.7b", "variant": "concise", "item_id": "c13-0004", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r013", "model": "smollm2-1.7b", "variant": "default", "item_id": "c07-0000", "kinds_main": ["uninformative", "kept", "kept", "kept", "kept"], "kinds_phi3.5-mini": ["misleading", "kept", "kept", "kept", "kept"]}
+{"uid": "r014", "model": "qwen2.5-0.5b", "variant": "default", "item_id": "c11-0004", "kinds_main": ["uninformative", "misleading", "kept", "kept"], "kinds_phi3.5-mini": ["misleading", "misleading", "kept", "kept"]}
+{"uid": "r015", "model": "smollm2-1.7b", "variant": "concise", "item_id": "c14-0011", "kinds_main": ["duplicate", "uninformative", "kept", "kept"], "kinds_phi3.5-mini": ["duplicate", "misleading", "uninformative", "kept"]}
+{"uid": "r016", "model": "qwen2.5-0.5b", "variant": "default", "item_id": "c01-0000", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r017", "model": "qwen2.5-1.5b", "variant": "default", "item_id": "c12-0002", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r018", "model": "qwen2.5-1.5b", "variant": "default", "item_id": "c12-0015", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r019", "model": "qwen2.5-1.5b", "variant": "concise", "item_id": "c13-0019", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r020", "model": "qwen2.5-0.5b", "variant": "concise", "item_id": "c09-0016", "kinds_main": ["kept", "kept", "uninformative", "kept", "kept", "kept"], "kinds_phi3.5-mini": ["kept", "kept", "uninformative", "kept", "kept", "kept"]}
+{"uid": "r021", "model": "qwen2.5-1.5b", "variant": "concise", "item_id": "c12-0007", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r022", "model": "qwen2.5-1.5b", "variant": "concise", "item_id": "c13-0012", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r023", "model": "qwen2.5-0.5b", "variant": "concise", "item_id": "c07-0006", "kinds_main": ["kept", "kept", "kept", "kept"], "kinds_phi3.5-mini": ["kept", "kept", "kept", "kept"]}
+{"uid": "r024", "model": "qwen2.5-0.5b", "variant": "concise", "item_id": "c14-0014", "kinds_main": ["kept", "kept"], "kinds_phi3.5-mini": ["kept", "kept"]}
+{"uid": "r025", "model": "qwen2.5-0.5b", "variant": "default", "item_id": "c14-0009", "kinds_main": ["kept", "kept", "uninformative", "uninformative", "duplicate"], "kinds_phi3.5-mini": ["kept", "kept", "uninformative", "uninformative", "duplicate"]}
+{"uid": "r026", "model": "qwen2.5-0.5b", "variant": "default", "item_id": "c14-0014", "kinds_main": ["kept", "uninformative", "uninformative", "duplicate", "uninformative", "duplicate", "duplicate", "kept"], "kinds_phi3.5-mini": ["kept", "misleading", "misleading", "duplicate", "misleading", "duplicate", "duplicate", "kept"]}
+{"uid": "r027", "model": "smollm2-1.7b", "variant": "default", "item_id": "c10-0019", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r028", "model": "qwen2.5-1.5b", "variant": "concise", "item_id": "c11-0003", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r029", "model": "qwen2.5-1.5b", "variant": "default", "item_id": "c01-0014", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r030", "model": "smollm2-1.7b", "variant": "default", "item_id": "c13-0005", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r031", "model": "smollm2-1.7b", "variant": "default", "item_id": "c09-0002", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r032", "model": "smollm2-1.7b", "variant": "default", "item_id": "c11-0014", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r033", "model": "qwen2.5-0.5b", "variant": "concise", "item_id": "c05-0017", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r034", "model": "smollm2-1.7b", "variant": "default", "item_id": "c09-0011", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r035", "model": "smollm2-1.7b", "variant": "default", "item_id": "c10-0002", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r036", "model": "smollm2-1.7b", "variant": "concise", "item_id": "c09-0003", "kinds_main": ["kept", "kept", "kept", "misleading", "kept", "kept"], "kinds_phi3.5-mini": ["kept", "kept", "kept", "misleading", "kept", "kept"]}
+{"uid": "r037", "model": "qwen2.5-1.5b", "variant": "default", "item_id": "c10-0007", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r038", "model": "qwen2.5-0.5b", "variant": "default", "item_id": "c06-0014", "kinds_main": ["uninformative", "kept", "kept", "kept", "uninformative"], "kinds_phi3.5-mini": ["misleading", "kept", "kept", "kept", "uninformative"]}
+{"uid": "r039", "model": "qwen2.5-1.5b", "variant": "concise", "item_id": "c11-0001", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r040", "model": "qwen2.5-1.5b", "variant": "default", "item_id": "c14-0001", "kinds_main": ["uninformative", "uninformative", "uninformative", "uninformative", "kept", "duplicate", "kept"], "kinds_phi3.5-mini": ["uninformative", "misleading", "misleading", "misleading", "kept", "duplicate", "kept"]}
+{"uid": "r041", "model": "qwen2.5-0.5b", "variant": "default", "item_id": "c14-0019", "kinds_main": ["kept", "duplicate", "kept"], "kinds_phi3.5-mini": ["duplicate", "duplicate", "kept"]}
+{"uid": "r042", "model": "qwen2.5-1.5b", "variant": "default", "item_id": "c13-0013", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r043", "model": "qwen2.5-1.5b", "variant": "default", "item_id": "c02-0015", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r044", "model": "qwen2.5-0.5b", "variant": "concise", "item_id": "c06-0009", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r045", "model": "smollm2-1.7b", "variant": "default", "item_id": "c03-0009", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r046", "model": "qwen2.5-0.5b", "variant": "default", "item_id": "c05-0004", "kinds_main": ["kept", "uninformative", "kept"], "kinds_phi3.5-mini": ["uninformative", "uninformative", "kept"]}
+{"uid": "r047", "model": "qwen2.5-0.5b", "variant": "concise", "item_id": "c06-0016", "kinds_main": ["kept", "kept", "uninformative", "kept"], "kinds_phi3.5-mini": ["kept", "kept", "uninformative", "kept"]}
+{"uid": "r048", "model": "qwen2.5-0.5b", "variant": "concise", "item_id": "c11-0009", "kinds_main": ["uninformative", "kept", "kept"], "kinds_phi3.5-mini": ["uninformative", "misleading", "kept"]}
+{"uid": "r049", "model": "smollm2-1.7b", "variant": "concise", "item_id": "c14-0019", "kinds_main": ["kept", "uninformative", "kept"], "kinds_phi3.5-mini": ["duplicate", "misleading", "kept"]}
+{"uid": "r050", "model": "qwen2.5-1.5b", "variant": "default", "item_id": "c12-0013", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r051", "model": "qwen2.5-0.5b", "variant": "concise", "item_id": "c13-0006", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r052", "model": "qwen2.5-1.5b", "variant": "default", "item_id": "c03-0018", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r053", "model": "qwen2.5-1.5b", "variant": "concise", "item_id": "c08-0011", "kinds_main": ["uninformative", "kept", "kept", "kept", "kept", "kept", "kept"], "kinds_phi3.5-mini": ["uninformative", "kept", "kept", "kept", "kept", "kept", "kept"]}
+{"uid": "r054", "model": "smollm2-1.7b", "variant": "default", "item_id": "c14-0000", "kinds_main": ["kept", "kept"], "kinds_phi3.5-mini": ["duplicate", "kept"]}
+{"uid": "r055", "model": "qwen2.5-1.5b", "variant": "default", "item_id": "c05-0008", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r056", "model": "qwen2.5-1.5b", "variant": "concise", "item_id": "c09-0010", "kinds_main": ["uninformative", "kept", "kept", "kept", "kept", "kept", "kept"], "kinds_phi3.5-mini": ["uninformative", "kept", "kept", "kept", "kept", "kept", "kept"]}
+{"uid": "r057", "model": "qwen2.5-0.5b", "variant": "concise", "item_id": "c01-0002", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r058", "model": "qwen2.5-0.5b", "variant": "concise", "item_id": "c12-0001", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r059", "model": "qwen2.5-0.5b", "variant": "default", "item_id": "c07-0006", "kinds_main": ["uninformative", "kept", "kept", "kept", "kept"], "kinds_phi3.5-mini": ["misleading", "kept", "kept", "kept", "kept"]}
+{"uid": "r060", "model": "qwen2.5-0.5b", "variant": "concise", "item_id": "c06-0014", "kinds_main": ["kept", "kept", "kept"], "kinds_phi3.5-mini": ["kept", "kept", "kept"]}
+{"uid": "r061", "model": "smollm2-1.7b", "variant": "default", "item_id": "c01-0000", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r062", "model": "qwen2.5-0.5b", "variant": "concise", "item_id": "c14-0018", "kinds_main": ["kept", "uninformative"], "kinds_phi3.5-mini": ["kept", "misleading"]}
+{"uid": "r063", "model": "qwen2.5-0.5b", "variant": "default", "item_id": "c11-0011", "kinds_main": ["uninformative", "uninformative", "uninformative", "kept", "kept"], "kinds_phi3.5-mini": ["duplicate", "kept", "kept", "kept", "kept"]}
+{"uid": "r064", "model": "qwen2.5-1.5b", "variant": "default", "item_id": "c13-0003", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r065", "model": "qwen2.5-1.5b", "variant": "default", "item_id": "c04-0011", "kinds_main": ["kept", "kept"], "kinds_phi3.5-mini": ["kept", "kept"]}
+{"uid": "r066", "model": "qwen2.5-0.5b", "variant": "concise", "item_id": "c00-0017", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r067", "model": "qwen2.5-0.5b", "variant": "default", "item_id": "c12-0014", "kinds_main": ["uninformative", "uninformative", "kept", "kept", "kept", "duplicate"], "kinds_phi3.5-mini": ["kept", "kept", "kept", "kept", "kept", "kept"]}
+{"uid": "r068", "model": "smollm2-1.7b", "variant": "concise", "item_id": "c08-0019", "kinds_main": ["kept", "kept", "kept", "kept", "kept", "kept"], "kinds_phi3.5-mini": ["kept", "kept", "kept", "kept", "kept", "kept"]}
+{"uid": "r069", "model": "qwen2.5-0.5b", "variant": "default", "item_id": "c01-0017", "kinds_main": ["uninformative", "kept", "uninformative", "misleading", "duplicate"], "kinds_phi3.5-mini": ["misleading", "kept", "uninformative", "misleading", "kept"]}
+{"uid": "r070", "model": "qwen2.5-1.5b", "variant": "concise", "item_id": "c05-0005", "kinds_main": ["uninformative", "kept", "kept", "kept"], "kinds_phi3.5-mini": ["uninformative", "kept", "kept", "kept"]}
+{"uid": "r071", "model": "smollm2-1.7b", "variant": "default", "item_id": "c12-0017", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r072", "model": "qwen2.5-1.5b", "variant": "default", "item_id": "c09-0001", "kinds_main": ["uninformative", "kept", "kept", "kept", "kept", "kept", "kept"], "kinds_phi3.5-mini": ["uninformative", "kept", "kept", "kept", "kept", "kept", "kept"]}
+{"uid": "r073", "model": "qwen2.5-0.5b", "variant": "default", "item_id": "c11-0016", "kinds_main": ["uninformative", "kept", "misleading", "kept"], "kinds_phi3.5-mini": ["misleading", "kept", "misleading", "kept"]}
+{"uid": "r074", "model": "qwen2.5-0.5b", "variant": "concise", "item_id": "c13-0014", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r075", "model": "qwen2.5-1.5b", "variant": "default", "item_id": "c08-0012", "kinds_main": ["uninformative", "kept", "kept", "kept", "kept", "kept", "kept"], "kinds_phi3.5-mini": ["uninformative", "kept", "kept", "kept", "kept", "kept", "kept"]}
+{"uid": "r076", "model": "smollm2-1.7b", "variant": "concise", "item_id": "c12-0017", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r077", "model": "smollm2-1.7b", "variant": "default", "item_id": "c14-0008", "kinds_main": ["kept", "uninformative", "uninformative", "kept", "uninformative"], "kinds_phi3.5-mini": ["kept", "uninformative", "uninformative", "kept", "duplicate"]}
+{"uid": "r078", "model": "qwen2.5-1.5b", "variant": "concise", "item_id": "c08-0012", "kinds_main": ["uninformative", "kept", "kept", "kept", "kept", "kept", "kept"], "kinds_phi3.5-mini": ["uninformative", "kept", "kept", "kept", "kept", "kept", "kept"]}
+{"uid": "r079", "model": "qwen2.5-0.5b", "variant": "default", "item_id": "c00-0016", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r080", "model": "qwen2.5-1.5b", "variant": "default", "item_id": "c00-0016", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r081", "model": "smollm2-1.7b", "variant": "concise", "item_id": "c14-0010", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r082", "model": "smollm2-1.7b", "variant": "concise", "item_id": "c13-0018", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r083", "model": "qwen2.5-0.5b", "variant": "concise", "item_id": "c05-0013", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r084", "model": "smollm2-1.7b", "variant": "concise", "item_id": "c03-0018", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r085", "model": "qwen2.5-1.5b", "variant": "default", "item_id": "c01-0019", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r086", "model": "qwen2.5-0.5b", "variant": "concise", "item_id": "c10-0014", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r087", "model": "qwen2.5-1.5b", "variant": "concise", "item_id": "c06-0009", "kinds_main": ["uninformative", "kept", "kept", "kept", "kept"], "kinds_phi3.5-mini": ["uninformative", "kept", "kept", "kept", "kept"]}
+{"uid": "r088", "model": "qwen2.5-0.5b", "variant": "default", "item_id": "c03-0008", "kinds_main": ["uninformative", "uninformative", "kept", "uninformative", "uninformative", "kept", "uninformative", "duplicate"], "kinds_phi3.5-mini": ["misleading", "uninformative", "kept", "uninformative", "uninformative", "kept", "uninformative", "duplicate"]}
+{"uid": "r089", "model": "smollm2-1.7b", "variant": "default", "item_id": "c00-0000", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r090", "model": "qwen2.5-1.5b", "variant": "concise", "item_id": "c14-0008", "kinds_main": ["kept", "kept", "duplicate"], "kinds_phi3.5-mini": ["kept", "kept", "duplicate"]}
+{"uid": "r091", "model": "qwen2.5-0.5b", "variant": "concise", "item_id": "c11-0001", "kinds_main": ["kept", "misleading", "misleading"], "kinds_phi3.5-mini": ["kept", "misleading", "misleading"]}
+{"uid": "r092", "model": "qwen2.5-1.5b", "variant": "default", "item_id": "c00-0005", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r093", "model": "smollm2-1.7b", "variant": "default", "item_id": "c12-0000", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r094", "model": "smollm2-1.7b", "variant": "concise", "item_id": "c12-0000", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r095", "model": "qwen2.5-1.5b", "variant": "default", "item_id": "c12-0016", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r096", "model": "qwen2.5-0.5b", "variant": "default", "item_id": "c11-0001", "kinds_main": ["kept", "misleading"], "kinds_phi3.5-mini": ["kept", "misleading"]}
+{"uid": "r097", "model": "qwen2.5-1.5b", "variant": "concise", "item_id": "c01-0002", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r098", "model": "smollm2-1.7b", "variant": "concise", "item_id": "c03-0010", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r099", "model": "qwen2.5-0.5b", "variant": "default", "item_id": "c13-0015", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r100", "model": "qwen2.5-1.5b", "variant": "concise", "item_id": "c11-0004", "kinds_main": ["kept", "kept", "kept"], "kinds_phi3.5-mini": ["misleading", "kept", "kept"]}
+{"uid": "r101", "model": "smollm2-1.7b", "variant": "concise", "item_id": "c11-0005", "kinds_main": ["kept", "uninformative", "kept"], "kinds_phi3.5-mini": ["kept", "kept", "kept"]}
+{"uid": "r102", "model": "smollm2-1.7b", "variant": "default", "item_id": "c11-0009", "kinds_main": ["kept", "kept", "kept"], "kinds_phi3.5-mini": ["kept", "kept", "kept"]}
+{"uid": "r103", "model": "smollm2-1.7b", "variant": "concise", "item_id": "c14-0009", "kinds_main": ["kept", "duplicate"], "kinds_phi3.5-mini": ["kept", "kept"]}
+{"uid": "r104", "model": "qwen2.5-1.5b", "variant": "concise", "item_id": "c01-0008", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r105", "model": "smollm2-1.7b", "variant": "default", "item_id": "c04-0015", "kinds_main": ["kept", "kept", "kept"], "kinds_phi3.5-mini": ["kept", "kept", "kept"]}
+{"uid": "r106", "model": "smollm2-1.7b", "variant": "default", "item_id": "c04-0007", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r107", "model": "smollm2-1.7b", "variant": "concise", "item_id": "c01-0007", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r108", "model": "qwen2.5-0.5b", "variant": "concise", "item_id": "c14-0010", "kinds_main": ["kept", "uninformative", "kept"], "kinds_phi3.5-mini": ["duplicate", "misleading", "kept"]}
+{"uid": "r109", "model": "smollm2-1.7b", "variant": "concise", "item_id": "c11-0018", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r110", "model": "qwen2.5-1.5b", "variant": "default", "item_id": "c13-0018", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r111", "model": "qwen2.5-0.5b", "variant": "default", "item_id": "c13-0010", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r112", "model": "qwen2.5-1.5b", "variant": "default", "item_id": "c14-0011", "kinds_main": ["uninformative", "kept", "duplicate", "uninformative", "uninformative", "uninformative", "duplicate", "duplicate"], "kinds_phi3.5-mini": ["misleading", "duplicate", "duplicate", "kept", "kept", "uninformative", "duplicate", "duplicate"]}
+{"uid": "r113", "model": "smollm2-1.7b", "variant": "concise", "item_id": "c13-0003", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r114", "model": "smollm2-1.7b", "variant": "default", "item_id": "c01-0005", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r115", "model": "smollm2-1.7b", "variant": "default", "item_id": "c04-0005", "kinds_main": ["kept", "kept"], "kinds_phi3.5-mini": ["kept", "kept"]}
+{"uid": "r116", "model": "qwen2.5-1.5b", "variant": "concise", "item_id": "c12-0010", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r117", "model": "qwen2.5-0.5b", "variant": "default", "item_id": "c04-0010", "kinds_main": ["uninformative", "kept", "kept", "kept"], "kinds_phi3.5-mini": ["misleading", "kept", "kept", "kept"]}
+{"uid": "r118", "model": "qwen2.5-0.5b", "variant": "concise", "item_id": "c05-0005", "kinds_main": ["kept", "misleading", "misleading"], "kinds_phi3.5-mini": ["kept", "misleading", "misleading"]}
+{"uid": "r119", "model": "smollm2-1.7b", "variant": "default", "item_id": "c06-0008", "kinds_main": ["kept", "kept", "kept", "kept"], "kinds_phi3.5-mini": ["kept", "kept", "kept", "kept"]}
+{"uid": "r120", "model": "qwen2.5-1.5b", "variant": "concise", "item_id": "c07-0008", "kinds_main": ["kept", "kept"], "kinds_phi3.5-mini": ["kept", "kept"]}
+{"uid": "r121", "model": "qwen2.5-1.5b", "variant": "default", "item_id": "c14-0015", "kinds_main": ["uninformative", "kept", "uninformative", "duplicate", "duplicate", "uninformative"], "kinds_phi3.5-mini": ["uninformative", "kept", "uninformative", "duplicate", "duplicate", "uninformative"]}
+{"uid": "r122", "model": "qwen2.5-0.5b", "variant": "default", "item_id": "c08-0007", "kinds_main": ["uninformative", "kept", "kept", "kept", "kept", "kept"], "kinds_phi3.5-mini": ["uninformative", "kept", "kept", "kept", "kept", "kept"]}
+{"uid": "r123", "model": "smollm2-1.7b", "variant": "default", "item_id": "c12-0011", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r124", "model": "qwen2.5-0.5b", "variant": "concise", "item_id": "c03-0000", "kinds_main": ["kept", "uninformative"], "kinds_phi3.5-mini": ["kept", "uninformative"]}
+{"uid": "r125", "model": "qwen2.5-0.5b", "variant": "default", "item_id": "c13-0001", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r126", "model": "qwen2.5-1.5b", "variant": "concise", "item_id": "c05-0002", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r127", "model": "smollm2-1.7b", "variant": "concise", "item_id": "c12-0001", "kinds_main": ["kept", "kept"], "kinds_phi3.5-mini": ["uninformative", "kept"]}
+{"uid": "r128", "model": "qwen2.5-0.5b", "variant": "default", "item_id": "c03-0005", "kinds_main": ["uninformative", "misleading", "kept"], "kinds_phi3.5-mini": ["misleading", "misleading", "kept"]}
+{"uid": "r129", "model": "qwen2.5-1.5b", "variant": "concise", "item_id": "c00-0006", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r130", "model": "qwen2.5-0.5b", "variant": "default", "item_id": "c12-0000", "kinds_main": ["uninformative", "kept", "kept", "kept", "uninformative"], "kinds_phi3.5-mini": ["misleading", "kept", "kept", "kept", "uninformative"]}
+{"uid": "r131", "model": "qwen2.5-0.5b", "variant": "default", "item_id": "c14-0005", "kinds_main": ["kept", "uninformative", "uninformative", "kept", "uninformative", "duplicate", "duplicate"], "kinds_phi3.5-mini": ["duplicate", "uninformative", "misleading", "kept", "uninformative", "duplicate", "duplicate"]}
+{"uid": "r132", "model": "qwen2.5-0.5b", "variant": "concise", "item_id": "c00-0003", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r133", "model": "qwen2.5-1.5b", "variant": "concise", "item_id": "c13-0001", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r134", "model": "qwen2.5-1.5b", "variant": "concise", "item_id": "c14-0012", "kinds_main": ["duplicate", "kept"], "kinds_phi3.5-mini": ["duplicate", "kept"]}
+{"uid": "r135", "model": "qwen2.5-1.5b", "variant": "concise", "item_id": "c12-0019", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r136", "model": "smollm2-1.7b", "variant": "concise", "item_id": "c03-0016", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r137", "model": "qwen2.5-0.5b", "variant": "concise", "item_id": "c11-0007", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r138", "model": "qwen2.5-1.5b", "variant": "default", "item_id": "c05-0015", "kinds_main": ["uninformative", "kept", "kept", "kept"], "kinds_phi3.5-mini": ["misleading", "kept", "kept", "kept"]}
+{"uid": "r139", "model": "qwen2.5-0.5b", "variant": "concise", "item_id": "c14-0019", "kinds_main": ["kept", "uninformative"], "kinds_phi3.5-mini": ["kept", "misleading"]}
+{"uid": "r140", "model": "qwen2.5-0.5b", "variant": "concise", "item_id": "c00-0016", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r141", "model": "smollm2-1.7b", "variant": "concise", "item_id": "c11-0009", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r142", "model": "qwen2.5-0.5b", "variant": "concise", "item_id": "c12-0007", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r143", "model": "smollm2-1.7b", "variant": "default", "item_id": "c12-0010", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r144", "model": "smollm2-1.7b", "variant": "concise", "item_id": "c00-0016", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r145", "model": "qwen2.5-1.5b", "variant": "default", "item_id": "c11-0002", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r146", "model": "smollm2-1.7b", "variant": "default", "item_id": "c13-0015", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r147", "model": "smollm2-1.7b", "variant": "concise", "item_id": "c11-0001", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r148", "model": "qwen2.5-0.5b", "variant": "default", "item_id": "c13-0011", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r149", "model": "qwen2.5-1.5b", "variant": "concise", "item_id": "c13-0014", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r150", "model": "qwen2.5-1.5b", "variant": "default", "item_id": "c13-0005", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r151", "model": "qwen2.5-1.5b", "variant": "default", "item_id": "c05-0009", "kinds_main": ["uninformative", "kept", "kept", "kept"], "kinds_phi3.5-mini": ["uninformative", "kept", "kept", "kept"]}
+{"uid": "r152", "model": "smollm2-1.7b", "variant": "default", "item_id": "c07-0018", "kinds_main": ["misleading", "kept", "kept", "misleading"], "kinds_phi3.5-mini": ["uninformative", "kept", "kept", "misleading"]}
+{"uid": "r153", "model": "smollm2-1.7b", "variant": "concise", "item_id": "c12-0018", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r154", "model": "smollm2-1.7b", "variant": "concise", "item_id": "c04-0015", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r155", "model": "qwen2.5-1.5b", "variant": "concise", "item_id": "c12-0018", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r156", "model": "qwen2.5-0.5b", "variant": "concise", "item_id": "c13-0008", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r157", "model": "qwen2.5-0.5b", "variant": "concise", "item_id": "c12-0014", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r158", "model": "qwen2.5-1.5b", "variant": "concise", "item_id": "c14-0003", "kinds_main": ["duplicate", "kept", "kept"], "kinds_phi3.5-mini": ["duplicate", "kept", "kept"]}
+{"uid": "r159", "model": "qwen2.5-0.5b", "variant": "default", "item_id": "c12-0007", "kinds_main": ["uninformative", "kept", "kept", "uninformative", "misleading", "uninformative"], "kinds_phi3.5-mini": ["misleading", "uninformative", "kept", "uninformative", "misleading", "uninformative"]}
+{"uid": "r160", "model": "smollm2-1.7b", "variant": "default", "item_id": "c14-0009", "kinds_main": ["kept", "duplicate"], "kinds_phi3.5-mini": ["kept", "duplicate"]}
+{"uid": "r161", "model": "smollm2-1.7b", "variant": "concise", "item_id": "c13-0011", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r162", "model": "qwen2.5-1.5b", "variant": "concise", "item_id": "c04-0014", "kinds_main": ["uninformative", "kept", "kept", "kept"], "kinds_phi3.5-mini": ["uninformative", "kept", "kept", "kept"]}
+{"uid": "r163", "model": "smollm2-1.7b", "variant": "default", "item_id": "c00-0017", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r164", "model": "qwen2.5-0.5b", "variant": "concise", "item_id": "c12-0002", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r165", "model": "smollm2-1.7b", "variant": "default", "item_id": "c13-0019", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r166", "model": "qwen2.5-1.5b", "variant": "concise", "item_id": "c00-0005", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r167", "model": "qwen2.5-0.5b", "variant": "default", "item_id": "c07-0008", "kinds_main": ["misleading", "kept", "kept", "misleading", "uninformative"], "kinds_phi3.5-mini": ["misleading", "kept", "kept", "misleading", "uninformative"]}
+{"uid": "r168", "model": "smollm2-1.7b", "variant": "concise", "item_id": "c00-0005", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r169", "model": "qwen2.5-0.5b", "variant": "default", "item_id": "c12-0018", "kinds_main": ["kept", "uninformative", "kept", "misleading", "kept"], "kinds_phi3.5-mini": ["kept", "kept", "kept", "kept", "kept"]}
+{"uid": "r170", "model": "smollm2-1.7b", "variant": "concise", "item_id": "c07-0018", "kinds_main": ["misleading", "kept", "kept", "misleading"], "kinds_phi3.5-mini": ["misleading", "kept", "kept", "misleading"]}
+{"uid": "r171", "model": "qwen2.5-1.5b", "variant": "default", "item_id": "c07-0006", "kinds_main": ["uninformative", "kept", "kept", "kept", "kept"], "kinds_phi3.5-mini": ["uninformative", "kept", "kept", "kept", "kept"]}
+{"uid": "r172", "model": "smollm2-1.7b", "variant": "concise", "item_id": "c07-0001", "kinds_main": ["uninformative", "uninformative", "kept", "kept", "kept"], "kinds_phi3.5-mini": ["uninformative", "kept", "kept", "kept", "kept"]}
+{"uid": "r173", "model": "qwen2.5-1.5b", "variant": "concise", "item_id": "c11-0012", "kinds_main": ["kept", "kept", "kept"], "kinds_phi3.5-mini": ["kept", "kept", "kept"]}
+{"uid": "r174", "model": "qwen2.5-1.5b", "variant": "default", "item_id": "c11-0017", "kinds_main": ["uninformative", "kept", "uninformative", "uninformative"], "kinds_phi3.5-mini": ["misleading", "kept", "uninformative", "kept"]}
+{"uid": "r175", "model": "smollm2-1.7b", "variant": "concise", "item_id": "c09-0014", "kinds_main": ["kept", "kept", "kept", "kept", "kept", "misleading"], "kinds_phi3.5-mini": ["kept", "kept", "kept", "kept", "kept", "misleading"]}
+{"uid": "r176", "model": "smollm2-1.7b", "variant": "concise", "item_id": "c08-0001", "kinds_main": ["kept", "kept", "kept", "kept", "kept", "kept"], "kinds_phi3.5-mini": ["kept", "kept", "kept", "kept", "kept", "kept"]}
+{"uid": "r177", "model": "qwen2.5-1.5b", "variant": "concise", "item_id": "c05-0011", "kinds_main": ["kept"], "kinds_phi3.5-mini": ["kept"]}
+{"uid": "r178", "model": "qwen2.5-0.5b", "variant": "concise", "item_id": "c08-0009", "kinds_main": ["kept", "kept", "kept", "uninformative", "kept", "kept"], "kinds_phi3.5-mini": ["kept", "kept", "kept", "uninformative", "kept", "kept"]}
+{"uid": "r179", "model": "qwen2.5-1.5b", "variant": "default", "item_id": "c14-0018", "kinds_main": ["uninformative", "uninformative", "uninformative", "uninformative", "kept", "uninformative", "duplicate", "kept"], "kinds_phi3.5-mini": ["uninformative", "misleading", "misleading", "misleading", "duplicate", "kept", "duplicate", "kept"]}
+{"uid": "r180", "model": "qwen2.5-1.5b", "variant": "default", "item_id": "c08-0004", "kinds_main": ["uninformative", "kept", "kept", "kept", "kept", "kept", "kept"], "kinds_phi3.5-mini": ["uninformative", "kept", "kept", "kept", "kept", "kept", "kept"]}

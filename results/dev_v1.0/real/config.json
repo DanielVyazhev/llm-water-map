@@ -1,0 +1,25 @@
+{
+ "suites": [
+  "cuad",
+  "musique",
+  "poddar",
+  "squad2"
+ ],
+ "n_per_cell": 15,
+ "oversample": 4,
+ "seed": 0,
+ "distractors": 3,
+ "reader": "Qwen/Qwen2.5-3B-Instruct",
+ "max_prior": 0.05,
+ "min_gold_p": 0.5,
+ "reader2": "microsoft/Phi-3.5-mini-instruct",
+ "models": {
+  "qwen2.5-0.5b": "Qwen/Qwen2.5-0.5B-Instruct",
+  "qwen2.5-1.5b": "Qwen/Qwen2.5-1.5B-Instruct",
+  "smollm2-1.7b": "HuggingFaceTB/SmolLM2-1.7B-Instruct"
+ },
+ "variants": [
+  "default",
+  "concise"
+ ]
+}

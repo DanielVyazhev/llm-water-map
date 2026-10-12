@@ -1,0 +1,18 @@
+{
+ "n_items": 30,
+ "reader_fail_rate": 0.0,
+ "gain_present_median": 13.811148962937125,
+ "gain_present_p10": 10.843412891288438,
+ "gain_absent_median": 0.0,
+ "gain_absent_p90": 0.0,
+ "auc_present_vs_absent": 0.9770114942528736,
+ "p_unknown_empty_median": 0.9999966621544857,
+ "misleading_check_active": 1.0,
+ "n_missing": 40,
+ "missing_prior_p_median": 1.3873723964988767e-08,
+ "missing_prior_p_max": 3.119480721644429e-05,
+ "missing_gold_p_median": 0.9866020010770523,
+ "missing_silent_p_median": 7.171274953570156e-07,
+ "missing_silent_p_max": 0.00014420307457924106,
+ "missing_style": "yesno"
+}

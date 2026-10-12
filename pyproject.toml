@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "drybench"
+version = "1.0.0"
+description = "Reader-based measurement of filler in LLM outputs, with entropy-based attribution"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.24", "pandas>=2.0", "scipy>=1.10"]
+
+[project.optional-dependencies]
+hf = ["torch>=2.1", "transformers>=4.44"]
+onnx = ["onnxruntime>=1.16", "tokenizers>=0.15"]
+plot = ["matplotlib>=3.7"]
+dev = ["pytest>=7"]
+
+[project.scripts]
+drybench = "drybench.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["drybench*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "slow: needs real model weights (skipped when assets are missing)",
+]
