@@ -219,9 +219,10 @@ def cmd_score(args: argparse.Namespace) -> None:
         t0 = time.perf_counter()
         res = dry_score(reader, items[r["item_id"]], r["response"], delta=args.delta,
                         mode=args.mode, segment_mode=args.segment, constraint=args.constraint,
-                        abs_tol=args.abs_tol)
+                        abs_tol=args.abs_tol, own_wording=not args.gold_forms_only)
         row = {"item_id": r["item_id"], "model": r["model"], "variant": r.get("variant", "default"),
-               **res.to_dict(), "seconds": round(time.perf_counter() - t0, 4), "device": device}
+               **res.to_dict(), "own_wording": not args.gold_forms_only,
+               "seconds": round(time.perf_counter() - t0, 4), "device": device}
         if args.ablation_delta is not None or args.ablation_abs_tol is not None:
             # a second tolerance on the same response; cheap, the reader cache holds most messages
             d = args.delta if args.ablation_delta is None else args.ablation_delta
@@ -229,7 +230,7 @@ def cmd_score(args: argparse.Namespace) -> None:
             t0 = time.perf_counter()
             ab = dry_score(reader, items[r["item_id"]], r["response"], delta=d, mode=args.mode,
                            segment_mode=args.segment, constraint=args.constraint, abs_tol=t,
-                           with_kappa=False)
+                           with_kappa=False, own_wording=not args.gold_forms_only)
             row["ablation"] = {"delta": d, "abs_tol": t, "W": ab.W, "W_filler": ab.W_filler,
                                "W_misleading": ab.W_misleading, "tokens_kept": ab.tokens_kept,
                                "seconds": round(time.perf_counter() - t0, 4)}
@@ -558,6 +559,9 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("--abs-tol", type=float, default=0.5, help="per-probe slack in nats")
     s.add_argument("--segment", default="sentence", choices=["sentence", "clause"])
     s.add_argument("--judge", action="store_true", help="also compute the LLM-judge filler baseline")
+    s.add_argument("--gold-forms-only", action="store_true",
+                   help="accept only the gold answer's forms, not the response's own wording of a fact "
+                        "(how v1.0.0 scored; for comparison)")
     s.set_defaults(fn=cmd_score)
 
     sg = sub.add_parser("signals", help="entropy signals of the evaluated model")

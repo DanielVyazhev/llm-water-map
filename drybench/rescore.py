@@ -18,6 +18,7 @@ PARTIAL = {
     # v0.8.1: a floor of 0.1 for a missing fact asked as a yes/no question (reader.BINARY_FLOOR):
     # responses to items with a missing fact, for readers whose missing-fact question is yes/no
     "8": "missing_binary",
+    # "9" (v1.1.0, the response's own wording of a fact is accepted) is not partial: every score is redone
 }
 # what a reader's folder holds besides its inputs: scores, checks of the reader, the analysis
 OUTPUTS = ("scored.jsonl", "reader_check.json", "report", "filler_check", "filler_check_real", "human_check")

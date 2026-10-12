@@ -1,4 +1,4 @@
-# Protocol of the confirmation run (package v1.0.0)
+# Protocol of the confirmation run (package v1.1.0)
 
 ## Development and confirmation
 
@@ -8,7 +8,7 @@ MuSiQue, CUAD, Poddar et al.; 15 items per cell); models Qwen2.5-0.5B/1.5B-Instr
 readers Qwen2.5-3B-Instruct and Phi-3.5-mini-instruct; Poddar et al.'s 189 human-labelled responses; 600
 missing-fact answers labelled while the abstention rule was built.
 
-**Confirmation run** — `colab/final_a100.ipynb` (or `scripts/run_final.py`), package v1.0.0:
+**Confirmation run** — `colab/final_a100.ipynb` (or `scripts/run_final.py`), package v1.1.0:
 - new synthetic items (seed 1, 30 per cell), and new items for the planted-filler check T1 (seed 2027; the
   development runs used 2026; the real-text suite does not repeat it as R2);
 - real-text items built only from source texts the development items do not use (no SQuAD paragraph, MuSiQue
@@ -30,6 +30,7 @@ questions left before the leakage filter.
 | What | Value | Code |
 |---|---|---|
 | information a response delivers | I_j = max(ln p, ln ε) − max(ln p∅, ln ε), ε = 10⁻⁶ | `drybench.reader` |
+| accepted answers | the gold's forms; for a fact they leave undelivered (p < 0.5), also the response's own wording of it (same words up to case, dashes, quotes, apostrophes, digit separators, '&', accents and articles; CUAD dates and terms by value), with up to 8 words of its phrase in front (never across , ( ) : ; or words such as not / or / than / renew…), kept when the reader replies with it at p ≥ 0.02 (best per place, at most 3); the same for each deleted fragment read alone when it is classified | `drybench.forms` |
 | tolerance of the filler map | τ = 0.5 nats, slack min(τ, I_j / 2), every delivered fact separately | `drybench.filler` |
 | deletion search | leave-one-out queue, a fragment that cannot go with the ones before it is skipped | `drybench.filler` |
 | fragments | sentences and list lines | `drybench.segment` |

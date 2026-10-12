@@ -90,6 +90,9 @@ class DryResult:
     per_probe_p: list[float] = field(default_factory=list)
     gold_per_probe_p: list[float] = field(default_factory=list)
     facts: float = float("nan")
+    # v1.1: the response's own wordings of a fact that were added to its accepted answers, per required
+    # probe (drybench.forms; empty lists: every fact read in the gold's words, or the option was off)
+    added_answers: list[list[str]] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -358,7 +361,7 @@ def answer_attempts(text: str, request: str, probes: Sequence[Probe]) -> np.ndar
 
 def classify_removed(reader: Reader, request: str, spans: Sequence[Span], probes: Sequence[Probe],
                      res: DryResult, dup_frac: float = 0.5, other_mass: float = 0.5,
-                     item: Item | None = None) -> None:
+                     item: Item | None = None, own_wording: bool = False) -> None:
     """Label every span of `res` (in place) and fill the W_* split.
 
     Each deleted span is read on its own:
@@ -371,6 +374,8 @@ def classify_removed(reader: Reader, request: str, spans: Sequence[Span], probes
       uninformative  otherwise
     Needs a chat reader told to answer 'unknown' (ReaderConfig.use_chat); with other readers
     deleted spans are labelled 'removed' and all count as filler.
+    own_wording (v1.1): a span read alone also gets its own wording of a fact accepted
+    (drybench.forms), so a fact restated in other words is a duplicate, not a wrong statement.
     """
     removed = [i for i, sr in enumerate(res.spans) if not sr.kept]
     for sr in res.spans:
@@ -384,14 +389,27 @@ def classify_removed(reader: Reader, request: str, spans: Sequence[Span], probes
             res.W_uninformative = res.W_duplicate = 0.0
         return
     msgs = [spans[i].text for i in removed] + [""]
-    gain = reader.per_probe_information(request, msgs[:-1], probes)  # each span read alone
-    p_other = wrong_answer_mass(reader, request, msgs, probes)
+    if own_wording:  # each span with its own probes: its own wording of a fact accepted
+        from drybench.forms import own_wording_probes
+
+        gain_rows, other_rows = [], []
+        for text in msgs[:-1]:
+            ps, _ = own_wording_probes(reader, request, probes, text)
+            gain_rows.append(reader.per_probe_information(request, [text], ps)[0])
+            other_rows.append(wrong_answer_mass(reader, request, [text, ""], ps))
+        gain = np.array(gain_rows)
+        p_other = np.array([r[0] for r in other_rows])
+        p_empty = np.array([r[1] for r in other_rows])
+    else:
+        gain = reader.per_probe_information(request, msgs[:-1], probes)  # each span read alone
+        both = wrong_answer_mass(reader, request, msgs, probes)
+        p_other, p_empty = both[:-1], np.repeat(both[-1:], len(removed), axis=0)
     full = np.asarray(res.per_probe, float)
     delivered = full >= res.abs_tol
     shares = {"uninformative": 0, "duplicate": 0, "misleading": 0}
     for row, i in enumerate(removed):
         dup = np.any(delivered & (gain[row] >= np.maximum(res.abs_tol, dup_frac * full)))
-        wrong = (p_other[row] >= other_mass) & (p_other[-1] < other_mass)
+        wrong = (p_other[row] >= other_mass) & (p_empty[row] < other_mass)
         excuse = misleading_excuse(spans[i].text, item) if item is not None else None
         attempt = bool(np.any(wrong & answer_attempts(spans[i].text, request, probes)))
         mis = bool(np.any(wrong)) and (excuse is None or (excuse == "true statement" and attempt))
@@ -421,15 +439,26 @@ def dry_score(
     abs_tol: float = 0.5,
     classify: bool = True,
     loo_skip: bool = True,
+    own_wording: bool = True,
 ) -> DryResult:
-    """Full scoring of one response to one item (required probes only)."""
-    probes = item.required_probes
+    """Full scoring of one response to one item (required probes only).
+
+    own_wording (v1.1, scoring version 9): a fact the response states in its own words ("Matthew Perry"
+    for the gold "matthew perry", "the State of Delaware" for "Delaware") is read with that wording too
+    (drybench.forms); False scores with the gold forms only, as v1.0.0 did."""
     spans = list(spans) if spans is not None else segment(response, segment_mode)
+    added: list[list[str]] = []
+    if own_wording:
+        from drybench.forms import with_own_wording
+
+        item, added = with_own_wording(reader, item, join_spans(spans))
+    probes = item.required_probes
     res = filler_map(reader, item.request, spans, probes, delta=delta, mode=mode,
                     length_fn=length_fn, min_info=min_info, constraint=constraint, abs_tol=abs_tol,
                     loo_skip=loo_skip)
+    res.added_answers = added
     if classify and res.status == "ok":
-        classify_removed(reader, item.request, spans, probes, res, item=item)
+        classify_removed(reader, item.request, spans, probes, res, item=item, own_wording=own_wording)
     if with_kappa:
         gold = float(reader.information(item.request, [item.gold_minimal], probes)[0])
         res.info_gold = gold

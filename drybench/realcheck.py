@@ -513,7 +513,8 @@ def human_label_check(reader: Reader, cases: Sequence[dict], out_dir: str | Path
                "human": fragment_labels(spans, c["labels"]), "resp_chars": length_chars(response),
                "document": it.document, "response": response, "source_label": it.meta.get("doc_label"),
                "cut_chars": c.get("cut_chars", 0),
-               "yap_excess": yap_excess_chars(response, it.gold_minimal), "stopword_share": stopword_share(response)}
+               "yap_excess": yap_excess_chars(response, it.gold_minimal), "stopword_share": stopword_share(response),
+               "added_answers": res.added_answers}
         rows.append(row)
         with rows_path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")

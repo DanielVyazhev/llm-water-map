@@ -29,6 +29,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(REPO))  # protocol.json records the package these scripts run (run_real.ENV), not another install
 
 import run_real as rr  # noqa: E402
 

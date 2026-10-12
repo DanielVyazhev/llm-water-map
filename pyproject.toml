@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "drybench"
-version = "1.0.0"
+version = "1.1.0"
 description = "Reader-based measurement of filler in LLM outputs, with entropy-based attribution"
 readme = "README.md"
 requires-python = ">=3.10"

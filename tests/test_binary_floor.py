@@ -134,7 +134,10 @@ def test_run_real_rescores_per_reader(tmp_path):
                                                         "signals": drybench.SIGNALS_VERSION}))
     (tmp_path / "filter_report.json").write_text(json.dumps({"scoring": str(int(drybench.SCORING_VERSION) - 1)}))
     run_real.check_versions(tmp_path, "Qwen/Qwen2.5-3B-Instruct", "microsoft/Phi-3.5-mini-instruct")
-    assert len((tmp_path / "scored.jsonl").read_text().splitlines()) == len(items) - len(missing)
-    assert len((r2 / "scored.jsonl").read_text().splitlines()) == len(items)  # Phi asks it plainly: unchanged
-    assert json.loads((tmp_path / "filter_report.json").read_text())["scoring"] == drybench.SCORING_VERSION
+    # the step from the version before is a full change (v1.1.0: the response's own wording of a fact is
+    # accepted): every reader's scores go, and the leakage filter is checked again (its report keeps the old
+    # version); the partial rescore of 7 -> 8 is tested above with explicit versions
+    assert not (tmp_path / "scored.jsonl").exists() and not (r2 / "scored.jsonl").exists()
+    old = str(int(drybench.SCORING_VERSION) - 1)
+    assert json.loads((tmp_path / "filter_report.json").read_text())["scoring"] == old
     assert json.loads((tmp_path / "versions.json").read_text())["scoring"] == drybench.SCORING_VERSION

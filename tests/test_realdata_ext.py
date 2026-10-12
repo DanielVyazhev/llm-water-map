@@ -357,8 +357,8 @@ def test_runner_on_four_suites_and_report(cuad_file, poddar_file, tmp_path):
     again = [json.loads(x)["item_id"] for x in (run / "items.jsonl").read_text().splitlines()]
     assert dropped["item_id"] in again and set(x["item_id"] for x in items) <= set(again)
     assert len((run / "responses.jsonl").read_text().splitlines()) == n_resp
-    # a run scored by the version before a partial change: only the answers to items with a missing fact
-    # are rescored (the mock readers get the yes/no question), the leakage filter is not run again
+    # a run scored by the version before: v1.1.0 changed every score (the response's own wording of a fact is
+    # accepted), so both readers rescore every response; the responses are kept and the filter is re-checked
     import drybench
 
     n_scored = {sub: len((sub / "scored.jsonl").read_text().splitlines()) for sub in (run, run / "reader2_mock2")}
@@ -368,10 +368,9 @@ def test_runner_on_four_suites_and_report(cuad_file, poddar_file, tmp_path):
     (run / "filter_report.json").write_text(json.dumps({**rep, "scoring": str(int(drybench.SCORING_VERSION) - 1)}))
     out = subprocess.run([str(c) for c in cmd], capture_output=True, text=True, timeout=600)
     assert out.returncode == 0, out.stdout[-3000:] + out.stderr[-3000:]
-    assert "rescoring scores of items with a missing fact" in out.stdout
-    assert "re-checking the rest of the pools" not in out.stdout
-    removed = [int(n) for n in re.findall(r"scored\.jsonl: (\d+) rows of items with a missing fact removed", out.stdout)]
-    assert len(removed) == 2 and min(removed) > 0  # both readers; rescored below
+    assert out.stdout.count("rescoring every score") == 2  # both readers
+    assert "re-checking the rest of the pools" in out.stdout
+    assert len((run / "responses.jsonl").read_text().splitlines()) == n_resp
     for sub, n in n_scored.items():
         assert len((sub / "scored.jsonl").read_text().splitlines()) == n
         assert (sub / "filler_check_real" / "summary.json").exists() and (sub / "report").exists()

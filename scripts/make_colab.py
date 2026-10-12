@@ -12,10 +12,12 @@ from __future__ import annotations
 import base64
 import io
 import json
+import sys
 import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))  # the version stamped on the notebooks is the package they embed
 
 
 def package_zip() -> bytes:

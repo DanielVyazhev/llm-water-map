@@ -49,6 +49,7 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--out", default=None, help="write the trace as JSON here")
     args = ap.parse_args(argv)
 
+    from drybench.forms import with_own_wording
     from drybench.segment import join_spans, segment
     from drybench.types import load_items, read_jsonl
     from drybench.filler import _feasible, dry_score, misleading_excuse, wrong_answer_mass
@@ -60,6 +61,11 @@ def main(argv: list[str] | None = None) -> None:
     reader = build_reader(args)
     res = dry_score(reader, item, response, mode="loo")
     spans = segment(response)
+    # v1.1: the trace reads the facts with the same accepted answers as dry_score (the response's own wording)
+    item, added = with_own_wording(reader, item, join_spans(spans))
+    if any(added):
+        print("accepted in the response's own words: " + "; ".join(
+            f"{p.question} → {', '.join(a)}" for p, a in zip(item.required_probes, added) if a))
     probes = item.required_probes
     floor = reader.log_floors(probes)  # per fact: a missing fact asked as yes/no has its own floor
     n = len(spans)
@@ -71,7 +77,7 @@ def main(argv: list[str] | None = None) -> None:
         return np.maximum(lps, floor) - np.maximum(prior, floor)
 
     prior = reader.prior_logprobs(item.request, probes)
-    full = lp([response])[0]
+    full = lp([join_spans(spans)])[0]  # the message the filler map reads
     without = lp([join_spans(spans, [j != i for j in range(n)]) for i in range(n)])
     I_full, I_without = info(full[None])[0], info(without)
     cost = I_full[None, :] - I_without

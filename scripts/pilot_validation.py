@@ -34,7 +34,8 @@ from drybench.baselines import length_chars, stopword_share, yap_excess_chars  #
 from drybench.entropy import response_span_entropies  # noqa: E402
 from drybench.items import evaluated_model_messages, generate_items  # noqa: E402
 from drybench.reader import Reader, ReaderConfig  # noqa: E402
-from drybench.segment import segment  # noqa: E402
+from drybench.forms import own_wording_probes  # noqa: E402
+from drybench.segment import join_spans, segment  # noqa: E402
 from drybench.simulate import (FILLER_TYPES, evaluate_filler_map, simulate, true_filler_fraction,  # noqa: E402
                                filler_check_metrics)
 from drybench.filler import completeness, filler_map  # noqa: E402
@@ -62,6 +63,8 @@ def score_response(reader, backend, it, cond, n_filler, n_omit, delta, greedy):
     omit = [p.fact_id for p in rng.sample(probes, n_omit)] if n_omit and len(probes) > 1 else []
     kinds = rng.sample(FILLER_TYPES, n_filler)
     sim = simulate(it, kinds, omit=omit, rng=rng)
+    # v1.1: as in dry_score, a fact the response states in other words than the gold is read in them too
+    probes, added = own_wording_probes(reader, it.request, probes, join_spans(list(sim.spans)))
     lengths = [backend.count_tokens(s.text) for s in sim.spans]
     row = {"item_id": it.item_id, "condition": cond, "k": it.knobs.get("k"), "d": it.knobs.get("d"),
            "filler_types": kinds, "n_omitted": len(omit), "request": it.request, "text": sim.text,
@@ -74,7 +77,7 @@ def score_response(reader, backend, it, cond, n_filler, n_omit, delta, greedy):
                                 == [(s.start, s.end) for s in sim.spans],
            "tokens": sum(lengths), "chars": length_chars(sim.text),
            "yap_excess": yap_excess_chars(sim.text, it.gold_minimal),
-           "stopword_share": stopword_share(sim.text)}
+           "stopword_share": stopword_share(sim.text), "added_answers": added}
     gold_info = float(reader.information(it.request, [it.gold_minimal], probes)[0])
     configs = [(name, algo, cons, delta if d is None else d, tol) for name, algo, cons, d, tol in SCORE_CONFIGS]
     if greedy:
