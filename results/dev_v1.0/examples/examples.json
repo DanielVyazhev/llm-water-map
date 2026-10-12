@@ -1,0 +1,853 @@
+[
+ {
+  "key": "synthetic",
+  "source": "synthetic",
+  "item_id": "c05-0008",
+  "model": "qwen2.5-0.5b",
+  "variant": "default",
+  "document": "Operations report, Relmi terminal.\nThe delay of shipment GZ-1638 was caused by a customs audit.\nShipment ZG-8138 was inspected by Marrel Vandra.\nShipment ZG-8138 was handled by Relgor Lines.\nShipment ZG-8138 was bound for Port Peltuqui.\nShipment ZG-8138 departed from Port Taulset.\nShipment GX-5338 was handled by Rakthiset Logistics.\nAll times are local.\nShipment JF-6062 left on 27 April.\nShipment NZ-1687 used 20 containers.\nShipment ZG-8138 left on 26 March.",
+  "request": "For shipment ZG-8138, what were the inspector, the origin port and the destination port?",
+  "gold": "Inspector: Marrel Vandra. Origin port: Port Taulset. Destination port: Port Peltuqui.",
+  "knobs": {
+   "k": 3,
+   "d": 4,
+   "answerable": true,
+   "ambiguous": false,
+   "hops": 1,
+   "explain": false
+  },
+  "meta": {},
+  "probes": [
+   {
+    "question": "Who inspected shipment ZG-8138?",
+    "answers": [
+     "Marrel Vandra"
+    ],
+    "value": "Marrel Vandra",
+    "required": true,
+    "p_full": 0.9999935627286333,
+    "p_gold": 0.9953557052671205,
+    "p_prior": 1.0000000000000004e-06,
+    "prior_at_floor": true,
+    "info": 13.815504120672188
+   },
+   {
+    "question": "From which port did shipment ZG-8138 depart?",
+    "answers": [
+     "Port Taulset"
+    ],
+    "value": "Port Taulset",
+    "required": true,
+    "p_full": 0.9991086326230434,
+    "p_gold": 0.9998545856887092,
+    "p_prior": 1.0000000000000004e-06,
+    "prior_at_floor": true,
+    "info": 13.814618793083184
+   },
+   {
+    "question": "To which port was shipment ZG-8138 bound?",
+    "answers": [
+     "Port Peltuqui"
+    ],
+    "value": "Port Peltuqui",
+    "required": true,
+    "p_full": 0.999896536564272,
+    "p_gold": 0.9997199341534567,
+    "p_prior": 1.0000000000000004e-06,
+    "prior_at_floor": true,
+    "info": 13.815407089175835
+   }
+  ],
+  "other_probes": [],
+  "response": "Based on the information provided in the report:\n\n- The shipment ZG-8138 was inspected by Marrel Vandra.\n- It was handled by Relgor Lines.\n- It was bound for Port Peltuqui.\n- It departed from Port Taulset.\n- All times mentioned (departure date, departure port) are correct.\n\nTherefore, the inspector for shipment ZG-8138 was Marrel Vandra, it was handled by Relgor Lines, and it departed from Port Taulset.",
+  "spans": [
+   {
+    "text": "Based on the information provided in the report:",
+    "start": 0,
+    "end": 48,
+    "tokens": 9,
+    "kept": false,
+    "kind": "uninformative",
+    "cost": 0.0014207195858944033,
+    "rank": 2
+   },
+   {
+    "text": "- The shipment ZG-8138 was inspected by Marrel Vandra.",
+    "start": 50,
+    "end": 104,
+    "tokens": 18,
+    "kept": true,
+    "kind": "kept",
+    "cost": -0.000492759026656131,
+    "rank": null
+   },
+   {
+    "text": "- It was handled by Relgor Lines.",
+    "start": 105,
+    "end": 138,
+    "tokens": 9,
+    "kept": false,
+    "kind": "uninformative",
+    "cost": 0.0006268430270210956,
+    "rank": 3
+   },
+   {
+    "text": "- It was bound for Port Peltuqui.",
+    "start": 139,
+    "end": 172,
+    "tokens": 11,
+    "kept": true,
+    "kind": "kept",
+    "cost": 13.814521642371176,
+    "rank": null
+   },
+   {
+    "text": "- It departed from Port Taulset.",
+    "start": 173,
+    "end": 205,
+    "tokens": 9,
+    "kept": true,
+    "kind": "kept",
+    "cost": 0.017418593441561825,
+    "rank": null
+   },
+   {
+    "text": "- All times mentioned (departure date, departure port) are correct.",
+    "start": 206,
+    "end": 273,
+    "tokens": 14,
+    "kept": false,
+    "kind": "uninformative",
+    "cost": -0.0008847306912684871,
+    "rank": 1
+   },
+   {
+    "text": "Therefore, the inspector for shipment ZG-8138 was Marrel Vandra, it was handled by Relgor Lines, and it departed from Port Taulset.",
+    "start": 275,
+    "end": 406,
+    "tokens": 36,
+    "kept": false,
+    "kind": "duplicate",
+    "cost": -0.00038617923610217986,
+    "rank": 0
+   }
+  ],
+  "trimmed": "- The shipment ZG-8138 was inspected by Marrel Vandra. - It was bound for Port Peltuqui. - It departed from Port Taulset.",
+  "m": {
+   "status": "ok",
+   "tokens": 106,
+   "tokens_kept": 38,
+   "tokens_gold": 24,
+   "removable": 0.6415094339622642,
+   "filler": 0.6415094339622641,
+   "wrong": 0.0,
+   "facts": 1.0,
+   "kappa": 1.0000984273444165,
+   "info": 41.44553000293121,
+   "info_kept": 41.446225704088135,
+   "info_gold": 41.44145103095747,
+   "overhead": 4.4162319886796935,
+   "x_removable": 2.789473684210526,
+   "x_wordiness": 1.5831775053757393,
+   "n_evals": 18
+  },
+  "note": null
+ },
+ {
+  "key": "squad",
+  "source": "squad2",
+  "item_id": "sq03-0001",
+  "model": "qwen2.5-0.5b",
+  "variant": "default",
+  "document": "University of Chicago\n\nIn the arts and entertainment, minimalist composer Philip Glass, dancer, choreographer and leader in the field of dance anthropology Katherine Dunham, Bungie founder and developer of the Halo video game series Alex Seropian, Serial host Sarah Koenig, actor Ed Asner, Pulitzer Prize for Criticism winning film critic and the subject of the 2014 documentary film Life Itself Roger Ebert, director, writer, and comedian Mike Nichols, film director and screenwriter Philip Kaufman, and Carl Van Vechten, photographer and writer, are graduates.",
+  "request": "Answer these questions about the text:\n1. What video game series did Alex Seropian make?\n2. What American actor is also a university graduate?\n3. What minimalist composer is also a university graduate?\n4. What comedian is also a university graduate?",
+  "gold": "1. Halo.\n2. Ed Asner.\n3. Philip Glass.\n4. Mike Nichols.",
+  "knobs": {
+   "k": 4,
+   "d": 0,
+   "answerable": true,
+   "ambiguous": false,
+   "hops": 1,
+   "explain": false,
+   "source": "squad2"
+  },
+  "meta": {
+   "doc_label": "Text",
+   "title": "University of Chicago",
+   "paragraph": "University_of_Chicago#30"
+  },
+  "probes": [
+   {
+    "question": "What video game series did Alex Seropian make?",
+    "answers": [
+     "Halo"
+    ],
+    "value": "Halo",
+    "required": true,
+    "p_full": 0.9999886752389164,
+    "p_gold": 0.9992346664074764,
+    "p_prior": 1.0000000000000004e-06,
+    "prior_at_floor": true,
+    "info": 13.815499233139064
+   },
+   {
+    "question": "What American actor is also a university graduate?",
+    "answers": [
+     "Ed Asner"
+    ],
+    "value": "Ed Asner",
+    "required": true,
+    "p_full": 3.891901699886409e-08,
+    "p_gold": 0.9999948740227821,
+    "p_prior": 1.0000000000000004e-06,
+    "prior_at_floor": true,
+    "info": 0.0
+   },
+   {
+    "question": "What minimalist composer is also a university graduate?",
+    "answers": [
+     "Philip Glass"
+    ],
+    "value": "Philip Glass",
+    "required": true,
+    "p_full": 0.9999737746294269,
+    "p_gold": 0.9999752050643922,
+    "p_prior": 1.0000000000000004e-06,
+    "prior_at_floor": true,
+    "info": 13.81548433224981
+   },
+   {
+    "question": "What comedian is also a university graduate?",
+    "answers": [
+     "Mike Nichols"
+    ],
+    "value": "Mike Nichols",
+    "required": true,
+    "p_full": 1.953931096101863e-12,
+    "p_gold": 0.9999974966107814,
+    "p_prior": 1.0000000000000004e-06,
+    "prior_at_floor": true,
+    "info": 0.0
+   }
+  ],
+  "other_probes": [],
+  "response": "1. Alex Seropian made the video game series Halo.\n2. The University of Chicago is an American university.\n3. Philip Glass is a minimalist composer who graduated from the University of Chicago.\n4. The University of Chicago is also an American university.",
+  "spans": [
+   {
+    "text": "1. Alex Seropian made the video game series Halo.",
+    "start": 0,
+    "end": 49,
+    "tokens": 12,
+    "kept": true,
+    "kind": "kept",
+    "cost": 13.815492915192237,
+    "rank": null
+   },
+   {
+    "text": "2. The University of Chicago is an American university.",
+    "start": 50,
+    "end": 105,
+    "tokens": 11,
+    "kept": false,
+    "kind": "uninformative",
+    "cost": 1.2874281310359947e-05,
+    "rank": 1
+   },
+   {
+    "text": "3. Philip Glass is a minimalist composer who graduated from the University of Chicago.",
+    "start": 106,
+    "end": 192,
+    "tokens": 16,
+    "kept": true,
+    "kind": "kept",
+    "cost": 13.815485285913212,
+    "rank": null
+   },
+   {
+    "text": "4. The University of Chicago is also an American university.",
+    "start": 193,
+    "end": 253,
+    "tokens": 12,
+    "kept": false,
+    "kind": "uninformative",
+    "cost": 1.1086112863267772e-05,
+    "rank": 0
+   }
+  ],
+  "trimmed": "1. Alex Seropian made the video game series Halo. 3. Philip Glass is a minimalist composer who graduated from the University of Chicago.",
+  "m": {
+   "status": "ok",
+   "tokens": 51,
+   "tokens_kept": 28,
+   "tokens_gold": 20,
+   "removable": 0.4509803921568627,
+   "filler": 0.45098039215686275,
+   "wrong": 0.0,
+   "facts": 0.5,
+   "kappa": 0.5000065412041195,
+   "info": 27.630983565388874,
+   "info_kept": 27.630966876557636,
+   "info_gold": 55.26124418062159,
+   "overhead": 5.0999332805908315,
+   "x_removable": 1.8214285714285714,
+   "x_wordiness": 2.7999633697361426,
+   "n_evals": 7
+  },
+  "note": null
+ },
+ {
+  "key": "musique",
+  "source": "musique",
+  "item_id": "mq00-0016",
+  "model": "qwen2.5-1.5b",
+  "variant": "default",
+  "document": "Document 1: Bâton à feu\nThe Bâton à feu, or Baston à feu (French for \"Fire stick\"), is a type of hand cannon developed in the 14th century in Western Europe. This weapon type corresponds to the portable artillery of the second half of 14th century.\n\nDocument 2: Tuberculosis\nOne-third of the world's population is thought to be infected with TB. New infections occur in about 1% of the population each year. In 2014, there were 9.6 million cases of active TB which resulted in 1.5 million deaths. More than 95% of deaths occurred in developing countries. The number of new cases each year has decreased since 2000. About 80% of people in many Asian and African countries test positive while 5–10% of people in the United States population tests positive by the tuberculin test. Tuberculosis has been present in humans since ancient times.\n\nDocument 3: Saint-Laurent-des-Bâtons\nSaint-Laurent-des-Bâtons is a former commune in the Dordogne department in southwestern France. On 1 January 2016, it was merged into the new commune Sainte-Alvère-Saint-Laurent-les-Bâtons, which merged into the new commune Val de Louyre et Caudeau on 1 January 2017.\n\nDocument 4: Indigenous peoples\nPrecise estimates for the total population of the world's Indigenous peoples are very difficult to compile, given the difficulties in identification and the variances and inadequacies of available census data. The United Nations estimates that there are over 370 million indigenous people living in over 70 countries worldwide. This would equate to just fewer than 6% of the total world population. This includes at least 5000 distinct peoples in over 72 countries.\n\nDocument 5: Consequences of the Black Death\nConsequences of the Black Death included a series of religious, social, and economic upheavals, which had profound effects on the course of European history. The Black Death was one of the most devastating pandemics in human history, peaking in Europe between 1347 and 1350 with 30% to 65% of the population killed. It reduced world population from an estimated 450 million to between 350 and 375 million. It took 80 and in some areas more than 150 years for Europe's population to recover.",
+  "request": "As a result of the black death it is estimated that the population of the country for Bâton à feu was reduced by how much?",
+  "gold": "30% to 65%.",
+  "knobs": {
+   "k": 1,
+   "d": 3,
+   "answerable": true,
+   "ambiguous": false,
+   "hops": 2,
+   "explain": false,
+   "source": "musique"
+  },
+  "meta": {
+   "doc_label": "Documents",
+   "musique_id": "2hop__107185_64006",
+   "decomposition": [
+    {
+     "question": "Which was the country for Bâton à feu?",
+     "answer": "Western Europe"
+    },
+    {
+     "question": "as a result of the black death it is estimated that the population of Western Europe was reduced by?",
+     "answer": "30% to 65%"
+    }
+   ]
+  },
+  "probes": [
+   {
+    "question": "As a result of the black death it is estimated that the population of the country for Bâton à feu was reduced by how much?",
+    "answers": [
+     "30% to 65%"
+    ],
+    "value": "30% to 65%",
+    "required": true,
+    "p_full": 0.9421257462503014,
+    "p_gold": 0.9963944253830676,
+    "p_prior": 1.0000000000000004e-06,
+    "prior_at_floor": true,
+    "info": 13.755894033238121
+   }
+  ],
+  "other_probes": [
+   {
+    "question": "Which was the country for Bâton à feu?",
+    "answers": [
+     "Western Europe"
+    ],
+    "required": false
+   }
+  ],
+  "response": "Based on the information provided in Document 5, the consequences of the Black Death included a significant reduction in the population of Europe. Specifically, it states:\n\n\"Between 1347 and 1350, the Black Death peaked in Europe with 30% to 65% of the population killed.\"\n\nThis indicates that the Black Death led to a substantial decrease in the population of Europe. While the exact percentage varies slightly depending on the source, it generally falls within this range. Therefore, the population of the country where the Bâton à feu was used likely experienced a significant decline as a direct consequence of the Black Death.",
+  "spans": [
+   {
+    "text": "Based on the information provided in Document 5, the consequences of the Black Death included a significant reduction in the population of Europe.",
+    "start": 0,
+    "end": 146,
+    "tokens": 26,
+    "kept": false,
+    "kind": "uninformative",
+    "cost": -0.051222942769527435,
+    "rank": 0
+   },
+   {
+    "text": "Specifically, it states:",
+    "start": 147,
+    "end": 171,
+    "tokens": 6,
+    "kept": false,
+    "kind": "uninformative",
+    "cost": 0.11750498041510582,
+    "rank": 3
+   },
+   {
+    "text": "\"Between 1347 and 1350, the Black Death peaked in Europe with 30% to 65% of the population killed.\"",
+    "start": 173,
+    "end": 272,
+    "tokens": 35,
+    "kept": true,
+    "kind": "kept",
+    "cost": 13.755894033238121,
+    "rank": null
+   },
+   {
+    "text": "This indicates that the Black Death led to a substantial decrease in the population of Europe.",
+    "start": 274,
+    "end": 368,
+    "tokens": 17,
+    "kept": false,
+    "kind": "uninformative",
+    "cost": -0.03688578121364117,
+    "rank": 1
+   },
+   {
+    "text": "While the exact percentage varies slightly depending on the source, it generally falls within this range.",
+    "start": 369,
+    "end": 474,
+    "tokens": 18,
+    "kept": false,
+    "kind": "uninformative",
+    "cost": -0.030595026910305023,
+    "rank": 2
+   },
+   {
+    "text": "Therefore, the population of the country where the Bâton à feu was used likely experienced a significant decline as a direct consequence of the Black Death.",
+    "start": 475,
+    "end": 631,
+    "tokens": 30,
+    "kept": true,
+    "kind": "kept",
+    "cost": 13.755894033238121,
+    "rank": null
+   }
+  ],
+  "trimmed": "\"Between 1347 and 1350, the Black Death peaked in Europe with 30% to 65% of the population killed.\" Therefore, the population of the country where the Bâton à feu was used likely experienced a significant decline as a direct consequence of the Black Death.",
+  "m": {
+   "status": "ok",
+   "tokens": 132,
+   "tokens_kept": 65,
+   "tokens_gold": 8,
+   "removable": 0.5075757575757576,
+   "filler": 0.5075757575757576,
+   "wrong": 0.0,
+   "facts": 1.0,
+   "kappa": 0.9959452037321503,
+   "info": 13.755894033238121,
+   "info_kept": 13.811954010277816,
+   "info_gold": 13.81189846759645,
+   "overhead": 16.567176525544586,
+   "x_removable": 2.0307692307692307,
+   "x_wordiness": 8.158079349699985,
+   "n_evals": 11
+  },
+  "note": null
+ },
+ {
+  "key": "cuad",
+  "source": "cuad",
+  "item_id": "cu02-0007",
+  "model": "qwen2.5-0.5b",
+  "variant": "default",
+  "document": "Exhibit 10.1\n\nCOOPERATION AGREEMENT\n\nThis Cooperation Agreement (\"Agreement\") is entered into as of July 1, 2020, by and between e.l.f. Beauty, Inc., a Delaware corporation (the \"Company\"), and Marathon Partners Equity Management, LLC (\"Marathon Partners\"), Marathon Partners L.P., Marathon Focus Fund L.P., Marathon Partners LUX Fund, L.P., Cibelli Research & Management, LLC and Mario Cibelli (collectively, the \"Marathon Parties\") (each of the Company, on the one hand, and the Marathon Parties, on the other hand, a \"Party\" to this Agreement, and collectively, the \"Parties\").\n\nRECITALS\n\nWHEREAS, the Marathon Parties have voting power or sole dispositive power or otherwise have beneficial ownership of 2,585,000 shares of the common stock, par value $0.01 per share, of the Company (the \"Common Stock\") as of the date of this Agreement;\n\nWHEREAS, Marathon Partners submitted a letter to the Company on May 28, 2020 (the \"Nomination Notice\") nominating a slate of director candidates to be elected to the Board of Directors of the Company (the \"Board\") at the Company's 2020 Annual Meeting of Shareholders (the \"2020 Annual Meeting\"); and\n\n[...]\n\n(viii) (A) seek or solicit support for (whether publicly or privately) any written consent of stockholders of the Company, (B) seek representation on, or nominate any candidate to, the Board, except as set forth in Section 1 of this Agreement, (C) seek the removal of any member of the Board, (D) conduct a referendum of stockholders, (E) institute any litigation against the Company, its directors or its officers other than to (1) enforce the provisions of this Agreement and (2) make counterclaims with respect to any proceeding initiated by, or on behalf of, the Company against the Marathon Parties, or (F) make a request for any stockholder list or other Company books and records, whether pursuant to Section 220 of the Delaware General Corporation Law or otherwise;\n\n[...]\n\n(f) In the event that the Support Period is automatically extended pursuant to Section 4(b), then, following the 2021 Annual Meeting Nomination Window Date, the Marathon Parties agree that any and all contacts and communications regarding the Company, as well as any request by any of the Marathon Parties or any of the Marathon Party Representatives to contact, communicate or meet with the Company or any of its Representatives (including any member of the Board), shall be directed solely to the Company's General Counsel. [...]\n\n(i) This Agreement shall be governed by and construed in accordance with the internal laws of the State of Delaware applicable to agreements made and to be performed within that state, without giving effect to any law or principals of law that would result in the application of the laws of any other jurisdiction.\n\n[...]",
+  "request": "Answer these questions about the contract:\n1. What is the title of this agreement?\n2. What is the date of this agreement?\n3. Which jurisdiction's law governs this agreement?",
+  "gold": "1. Cooperation Agreement.\n2. July 1, 2020.\n3. Delaware.",
+  "knobs": {
+   "k": 3,
+   "d": 2,
+   "answerable": true,
+   "ambiguous": false,
+   "hops": 1,
+   "explain": false,
+   "source": "cuad",
+   "long": false
+  },
+  "meta": {
+   "doc_label": "Contract excerpt",
+   "contract": "ELFBEAUTY,INC_07_02_2020-EX-10.1-COOPERATION AGREEMENT"
+  },
+  "probes": [
+   {
+    "question": "What is the title of this agreement?",
+    "answers": [
+     "Cooperation Agreement",
+     "COOPERATION AGREEMENT"
+    ],
+    "value": "Cooperation Agreement",
+    "required": true,
+    "p_full": 0.9801686029735094,
+    "p_gold": 0.9995586594428908,
+    "p_prior": 1.0000000000000004e-06,
+    "prior_at_floor": true,
+    "info": 13.795479879699428
+   },
+   {
+    "question": "What is the date of this agreement?",
+    "answers": [
+     "7/1/2020",
+     "2020-07-01",
+     "1 July 2020",
+     "July 1, 2020",
+     "JULY 1, 2020",
+     "July 1st, 2020",
+     "1st day of July, 2020"
+    ],
+    "value": "July 1, 2020",
+    "required": true,
+    "p_full": 0.9999929737293947,
+    "p_gold": 0.9999940458030282,
+    "p_prior": 1.0000000000000004e-06,
+    "prior_at_floor": true,
+    "info": 13.815503531668984
+   },
+   {
+    "question": "Which jurisdiction's law governs this agreement?",
+    "answers": [
+     "Delaware",
+     "DELAWARE",
+     "State of Delaware",
+     "the State of Delaware",
+     "the laws of the State of Delaware"
+    ],
+    "value": "Delaware",
+    "required": true,
+    "p_full": 1.3715502457988118e-07,
+    "p_gold": 0.9999759427909006,
+    "p_prior": 1.0000000000000004e-06,
+    "prior_at_floor": true,
+    "info": 0.0
+   }
+  ],
+  "other_probes": [],
+  "response": "1. The title of this agreement is \"Cooperation Agreement.\"\n2. The date of this agreement is July 1, 2020.\n3. The jurisdiction's law governing this agreement is the Internal Laws of the State of Delaware.",
+  "spans": [
+   {
+    "text": "1. The title of this agreement is \"Cooperation Agreement.\"",
+    "start": 0,
+    "end": 58,
+    "tokens": 13,
+    "kept": true,
+    "kind": "kept",
+    "cost": 13.795532930907356,
+    "rank": null
+   },
+   {
+    "text": "2. The date of this agreement is July 1, 2020.",
+    "start": 59,
+    "end": 105,
+    "tokens": 18,
+    "kept": true,
+    "kind": "kept",
+    "cost": 13.799171412415383,
+    "rank": null
+   },
+   {
+    "text": "3. The jurisdiction's law governing this agreement is the Internal Laws of the State of Delaware.",
+    "start": 106,
+    "end": 203,
+    "tokens": 19,
+    "kept": false,
+    "kind": "misleading",
+    "cost": -0.0017828689786121288,
+    "rank": 0
+   }
+  ],
+  "trimmed": "1. The title of this agreement is \"Cooperation Agreement.\" 2. The date of this agreement is July 1, 2020.",
+  "m": {
+   "status": "ok",
+   "tokens": 50,
+   "tokens_kept": 31,
+   "tokens_gold": 21,
+   "removable": 0.38,
+   "filler": 0.0,
+   "wrong": 0.38,
+   "facts": 0.6666666666666666,
+   "kappa": 0.6661907853727558,
+   "info": 27.610983411368412,
+   "info_kept": 27.612766280347024,
+   "info_gold": 41.44606022420312,
+   "overhead": 3.573979756595041,
+   "x_removable": 1.6129032258064515,
+   "x_wordiness": 2.2158674490889254,
+   "n_evals": 5
+  },
+  "note": null
+ },
+ {
+  "key": "poddar",
+  "source": "poddar",
+  "item_id": "pd01-0009",
+  "model": "smollm2-1.7b",
+  "variant": "default",
+  "document": "It'll be his first visit to Idaho as President. It leaves three states he has yet to visit: South Carolina, South Dakota and Utah. Mark Knoller (@markknoller) January 21, 2015",
+  "request": "Who is visiting these states?",
+  "gold": "the president.",
+  "knobs": {
+   "k": 1,
+   "d": 0,
+   "answerable": true,
+   "ambiguous": false,
+   "hops": 1,
+   "explain": false,
+   "source": "poddar",
+   "subset": "tweetqa"
+  },
+  "meta": {
+   "doc_label": "Tweet",
+   "subset": "tweetqa"
+  },
+  "probes": [
+   {
+    "question": "Who is visiting these states?",
+    "answers": [
+     "president",
+     "President",
+     "the president",
+     "The president"
+    ],
+    "value": "the president",
+    "required": true,
+    "p_full": 0.9999666717749957,
+    "p_gold": 0.9999877332633627,
+    "p_prior": 1.0000000000000004e-06,
+    "prior_at_floor": true,
+    "info": 13.815477229183871
+   }
+  ],
+  "other_probes": [],
+  "response": "The tweet is referring to President Barack Obama's first visit to Idaho as President. He has yet to visit South Carolina, South Dakota, and Utah.",
+  "spans": [
+   {
+    "text": "The tweet is referring to President Barack Obama's first visit to Idaho as President.",
+    "start": 0,
+    "end": 85,
+    "tokens": 16,
+    "kept": true,
+    "kind": "kept",
+    "cost": 13.815477229183871,
+    "rank": null
+   },
+   {
+    "text": "He has yet to visit South Carolina, South Dakota, and Utah.",
+    "start": 86,
+    "end": 145,
+    "tokens": 14,
+    "kept": false,
+    "kind": "uninformative",
+    "cost": 1.0869129507540265e-06,
+    "rank": 0
+   }
+  ],
+  "trimmed": "The tweet is referring to President Barack Obama's first visit to Idaho as President.",
+  "m": {
+   "status": "ok",
+   "tokens": 30,
+   "tokens_kept": 16,
+   "tokens_gold": 3,
+   "removable": 0.4666666666666667,
+   "filler": 0.4666666666666667,
+   "wrong": 0.0,
+   "facts": 1.0,
+   "kappa": 0.9999984754825281,
+   "info": 13.815477229183871,
+   "info_kept": 13.81547614227092,
+   "info_gold": 13.8154982911524,
+   "overhead": 10.000015245197961,
+   "x_removable": 1.875,
+   "x_wordiness": 5.33334146410558,
+   "n_evals": 4
+  },
+  "note": null
+ },
+ {
+  "key": "planted",
+  "source": "squad2",
+  "item_id": "sq00-0000",
+  "condition": "heavy",
+  "filler_types": [
+   "elaboration",
+   "generic",
+   "closing",
+   "hedge",
+   "restatement"
+  ],
+  "document": "Harvard University\n\nThe University is organized into eleven separate academic units—ten faculties and the Radcliffe Institute for Advanced Study—with campuses throughout the Boston metropolitan area: its 209-acre (85 ha) main campus is centered on Harvard Yard in Cambridge, approximately 3 miles (5 km) northwest of Boston; the business school and athletics facilities, including Harvard Stadium, are located across the Charles River in the Allston neighborhood of Boston and the medical, dental, and public health schools are in the Longwood Medical Area. Harvard's $37.6 billion financial endowment is the largest of any academic institution.",
+  "request": "How many academic units make up the school?",
+  "meta": {
+   "title": "Harvard University"
+  },
+  "probes": [
+   {
+    "question": "How many academic units make up the school?",
+    "answers": [
+     "11",
+     "eleven",
+     "Eleven"
+    ]
+   }
+  ],
+  "spans": [
+   {
+    "text": "Here is the information you requested from the text.",
+    "truth": "filler:restatement",
+    "kept": false,
+    "kind": "uninformative",
+    "cost": 0.24316039401646172
+   },
+   {
+    "text": "The University is organized into eleven separate academic units—ten faculties and the Radcliffe Institute for Advanced Study—with campuses throughout the Boston metropolitan area: its 209-acre (85 ha) main campus is centered on Harvard Yard in Cambridge, approximately 3 miles (5 km) northwest of Boston; the business school and athletics facilities, including Harvard Stadium, are located across the Charles River in the Allston neighborhood of Boston and the medical, dental, and public health schools are in the Longwood Medical Area.",
+    "truth": "fact",
+    "kept": true,
+    "kind": "kept",
+    "cost": 13.795681253625801
+   },
+   {
+    "text": "Please note that the text may not cover every detail.",
+    "truth": "filler:hedge",
+    "kept": false,
+    "kind": "uninformative",
+    "cost": 0.0013200324233082483
+   },
+   {
+    "text": "Such details are usually given close to the relevant passage.",
+    "truth": "filler:generic",
+    "kept": false,
+    "kind": "uninformative",
+    "cost": 0.005080415507023872
+   },
+   {
+    "text": "Harvard's $37.6 billion financial endowment is the largest of any academic institution.",
+    "truth": "filler:elaboration",
+    "kept": false,
+    "kind": "uninformative",
+    "cost": -0.005136807052663173
+   },
+   {
+    "text": "Let me know if you need anything else.",
+    "truth": "filler:closing",
+    "kept": false,
+    "kind": "uninformative",
+    "cost": 0.039456653114005036
+   }
+  ],
+  "m": {
+   "W_true": 0.3719512195121951,
+   "W_map": 0.3719512195121951,
+   "safety": 1.0,
+   "precision": 1.0,
+   "recall": 1.0,
+   "tokens": 164,
+   "facts": 1.0
+  }
+ },
+ {
+  "key": "planted_wrong",
+  "source": "squad2",
+  "item_id": "sq01-0000",
+  "condition": "wrong",
+  "filler_types": [
+   "closing"
+  ],
+  "document": "Prime number\n\nAfter the Greeks, little happened with the study of prime numbers until the 17th century. In 1640 Pierre de Fermat stated (without proof) Fermat's little theorem (later proved by Leibniz and Euler). Fermat also conjectured that all numbers of the form 22n + 1 are prime (they are called Fermat numbers) and he verified this up to n = 4 (or 216 + 1). However, the very next Fermat number 232 + 1 is composite (one of its prime factors is 641), as Euler discovered later, and in fact no further Fermat numbers are known to be prime. The French monk Marin Mersenne looked at primes of the form 2p − 1, with p a prime. They are called Mersenne primes in his honor.",
+  "request": "Answer these questions about the text:\n1. Besides Leibniz, what other mathematician proved the validity of Fermat's little theorem?\n2. In what year did Pierre de Fermat declare Fermat's little theorem?",
+  "meta": {
+   "title": "Prime number"
+  },
+  "probes": [
+   {
+    "question": "Besides Leibniz, what other mathematician proved the validity of Fermat's little theorem?",
+    "answers": [
+     "Euler"
+    ]
+   },
+   {
+    "question": "In what year did Pierre de Fermat declare Fermat's little theorem?",
+    "answers": [
+     "1640",
+     "In 1640"
+    ]
+   }
+  ],
+  "spans": [
+   {
+    "text": "In 1640 Pierre de Fermat stated (without proof) Fermat's little theorem (later proved by Leibniz and Euler).",
+    "truth": "fact",
+    "kept": true,
+    "kind": "kept",
+    "cost": 26.528957315690533
+   },
+   {
+    "text": "The answer to \"In what year did Pierre de Fermat declare Fermat's little theorem?\" is 1961.",
+    "truth": "wrong",
+    "kept": false,
+    "kind": "misleading",
+    "cost": -1.1018237607047325
+   },
+   {
+    "text": "I hope this helps!",
+    "truth": "filler:closing",
+    "kept": false,
+    "kind": "uninformative",
+    "cost": -0.8893492366863889
+   }
+  ],
+  "m": {
+   "W_true": 0.5,
+   "W_map": 0.5,
+   "safety": 1.0,
+   "precision": 1.0,
+   "recall": 1.0,
+   "tokens": 62,
+   "facts": 1.0
+  }
+ },
+ {
+  "key": "human",
+  "source": "poddar-human",
+  "case": "pdh-tweetqa-688-Mistral-7B-Instruct-v0.3",
+  "model": "Mistral-7B-Instruct-v0.3",
+  "subset": "tweetqa",
+  "request": "Who is hosting team heads together?",
+  "document": "The Duchess of Cambridge hosts #TeamHeadsTogether runners at Kensington Palace, to wish them luck with preparing for the @ Kensington Palace (@KensingtonRoyal) April 19, 2017",
+  "reference": "the duchess of cambridge",
+  "answers": [
+   "duchess of cambridge",
+   "Duchess of cambridge",
+   "Duchess of Cambridge",
+   "the duchess of cambridge",
+   "The duchess of cambridge",
+   "The Duchess of Cambridge (Kate Middleton",
+   "the Duchess of Cambridge (Kate Middleton"
+  ],
+  "own_answer": "The Duchess of Cambridge (Kate Middleton)",
+  "answer_source": "reference",
+  "spans": [
+   {
+    "text": "The Duchess of Cambridge (Kate Middleton) is hosting Team Heads Together.",
+    "human": "MINANS",
+    "kept": true,
+    "kind": "kept",
+    "cost": 13.815015018256785
+   },
+   {
+    "text": "She's a big advocate for mental health awareness and this event supports that cause.",
+    "human": "ADDINFO",
+    "kept": false,
+    "kind": "uninformative",
+    "cost": -0.0004427571149285825
+   },
+   {
+    "text": "Good luck to all the runners!",
+    "human": "ADDINFO",
+    "kept": false,
+    "kind": "uninformative",
+    "cost": 0.0002738221528257867
+   },
+   {
+    "text": "#MentalHealthAwareness #TeamHeadsTogether",
+    "human": "IRREL",
+    "kept": false,
+    "kind": "uninformative",
+    "cost": -0.00017817597859881573
+   }
+  ],
+  "m": {
+   "W": 0.7083333333333333,
+   "tokens": 48,
+   "facts": 1.0,
+   "status": "ok"
+  }
+ }
+]
