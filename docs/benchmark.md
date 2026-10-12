@@ -30,7 +30,8 @@ flowchart LR
 ```
 
 Evaluated models get the source and the request in one user turn, greedy decoding, up to 320 new tokens (400 in
-the confirmation run):
+the confirmation run). The repetition penalty of each model's generation config applies (Qwen2.5-0.5B/1.5B-Instruct:
+1.1; SmolLM2-1.7B-Instruct: none). A response cut at the token limit is not marked.
 
 ```text
 system: You answer questions about internal operations reports.          (synthetic)
@@ -68,8 +69,9 @@ deterministic in the seed (development: 0; confirmation: 1).
 | CUAD v1 | k = 1, 2, 3; k = 1 long; missing law with k = 2 | contract excerpt | governing law of an excerpt without its clause | CC BY 4.0 |
 | Poddar et al. 2025 | NarrativeQA, TweetQA, MS MARCO | story summary, tweet, search passages | — | GPL-3.0 |
 
-**SQuAD 2.0.** Answers of up to 5 words. No question contains its own answer or the answer to another question
-of the same request. Canonical answer: the annotators' majority, ties to the shortest. The unanswerable question
+**SQuAD 2.0.** Answers of up to 5 words. No question contains its own canonical answer or the canonical answer to
+another question of the same request. Every annotator's answer span is accepted, including spans that disagree
+with the majority. Canonical answer: the annotators' majority, ties to the shortest. The unanswerable question
 stands at a random position; it is written to look answerable and the text holds a plausible wrong answer.
 
 **MuSiQue.** Paragraphs shuffled and headed "Document i: title". The decomposition steps become standalone
@@ -81,8 +83,8 @@ Date, parsed; any usual spelling accepted), governing law (the jurisdiction in G
 Expiration Date, e.g. "five (5) years"). Contracts are long (median ~5,000 words), so an item is an excerpt of up to
 900 words (1,800 in the long cell): the opening (title, parties, date), the paragraphs with the requested facts and
 2 other paragraphs (8 in the long cell), "[...]" for gaps. Distractor paragraphs never come from date, term or law
-clauses, so each fact is stated once. For the missing law the clause is cut out; "a Delaware corporation" may
-remain as a plausible wrong answer.
+clauses; the opening and signature blocks can state the title or date a second time. For the missing law the
+clause is cut out; "a Delaware corporation" may remain as a plausible wrong answer.
 
 **Poddar et al.** The subsets with a source text (Dolly and GooAQ have none). Reference answers of up to 5 words;
 the n-gram of the source closest to the reference (token F1 ≥ 0.75) is also accepted. One item per question. The
@@ -111,7 +113,8 @@ flowchart TD
     G -->|yes| A["Keep, up to n per cell"]
 ```
 
-In the development run every cell kept 15 items except MS MARCO (12 of 17 candidates).
+In the development run every cell kept 15 items except MS MARCO (12 of 17 candidates). The counts of dropped items
+per cell were overwritten by a later top-up of the filter (table R0 shows 0).
 
 ## Missing-fact items
 

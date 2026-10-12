@@ -18,7 +18,7 @@ flowchart LR
 
 ## Status (October 2026)
 
-- Code v1.1.0 (package `drybench`). Fixes answer matching: a correct answer in the response's own words is credited.
+- Code v1.1.0 (package `drybench`). Answer matching also accepts the response's own wording of a gold answer.
 - Results: development runs on a Colab T4 (models up to 1.7B, readers Qwen2.5-3B and Phi-3.5-mini), scored by
   v1.0.0; to be rescored with v1.1.0.
 - Next: rescoring, the confirmation run on an A100, human labels.
@@ -36,15 +36,17 @@ reports, taken from the source text on real texts) and planted filler: openers, 
 restated requests, true but unrequested sentences, summaries. On real texts one condition also plants a wrong
 statement, which counts as removable. Development runs, reader Qwen2.5-3B, v1.0.0 scores.
 
-- The filler map is right in 84–99% of pairs on every dataset.
+- The filler map is right in 84–99% of pairs on every dataset. Left out: responses from which the reader reads no
+  fact (39 of 298 on real texts). Counted as all removable, the filler map is right in 74–83% on real texts.
 - Length works only where the fact sentences are short, so filler is what makes a response long: synthetic reports
-  (median 32 characters) and Poddar et al. (88). On SQuAD 2.0, MuSiQue and CUAD (131–142) it is close to a coin
+  (median 32 characters) and Poddar et al. (83). On SQuAD 2.0, MuSiQue and CUAD (145–162) it is close to a coin
   flip (46–58%).
-- Per fragment (is this fragment filler?) the filler map's ROC-AUC is 0.98 on synthetic reports and 0.79–0.99 on
-  real texts. The simple metrics give one number per response and have no per-fragment score.
-- Not in the chart: answers of 10 LLMs labelled by people (Poddar et al.). There the filler map is right in 88% of
-  pairs and length in 92%: no advantage yet. The human labels of the confirmation run decide it
-  ([docs/results.md](docs/results.md)).
+- Per fragment (filler or wrong vs needed) the filler map's yes/no decisions have ROC-AUC 0.98 on synthetic reports
+  and 0.79–0.99 on real texts; for yes/no decisions this equals balanced accuracy. The simple metrics give one
+  number per response and have no per-fragment score.
+- Not in the chart: answers of 10 LLMs labelled by people (Poddar et al.). There length is right in 92% of pairs
+  and the filler map in 88% (95% CI of the difference: −8.5 to −0.2 points). The human labels of the confirmation
+  run decide it ([docs/results.md](docs/results.md)).
 
 The chart is rebuilt by `python scripts/readme_figure.py`.
 

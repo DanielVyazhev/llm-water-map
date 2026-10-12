@@ -11,7 +11,8 @@ A change of the scoring version makes a resumed run recompute its scores ([runni
 
 ## 1.0.0 (scoring version 8)
 
-- Frozen for the confirmation run: `scripts/run_final.py`, `colab/final_a100.ipynb`, `protocol.json`.
+- Prepared for the confirmation run (`scripts/run_final.py`, `colab/final_a100.ipynb`, `protocol.json`); replaced by
+  1.1.0 before the run was made.
 - Baselines on the same responses: LLM judge per fragment, Selective Context, length, Yap excess, stop-word share;
   F1, Cohen's κ, AUC, Spearman, pair test, partial Spearman given length.
 - One set of labelling guidelines for people, chat LLMs and the judge. Samples and report for human labels.

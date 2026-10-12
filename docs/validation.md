@@ -58,21 +58,23 @@ wrong statement.
 
 Poddar et al. (2025) labelled 500 responses of 10 LLMs character by character: minimal answer (MINANS), additional
 information, explanation, conversational, redundant, irrelevant. Used: the passage subsets with a reference answer
-of up to 6 words (189 responses).
+of up to 6 words (189 responses; the benchmark's own Poddar et al. items use up to 5).
 
 ```mermaid
 flowchart TD
     A["Response + character labels"] --> C["Cut text after the last labelled span"]
     C --> S["Fragments; label = the label of<br>most of the fragment's characters"]
     S --> T["MINANS → needed;<br>other labels → not minimal;<br>unlabelled → left out"]
-    A --> F["Fact = the reference answer,<br>or what the reader reads<br>from the MINANS fragments"]
+    A --> F["Fact: the reference answer's forms<br>plus what the reader reads<br>from the MINANS fragments"]
     F --> M["Filler map"]
     S --> M
     M --> E["precision · recall · F1 · Cohen's κ<br>share deleted per human label<br>ranking of the 10 LLMs: Kendall τ"]
     T --> E
 ```
 
-The fact is the response's own answer: annotators marked the minimal answer whether or not it was right.
+The fact is the response's own answer: annotators marked the minimal answer whether or not it was right. It is
+read from the MINANS fragments, so for those responses the human labels enter the method; R4 also reports the
+responses whose fact is the reference answer ([results.md](results.md#checks)).
 
 ## Baselines
 
@@ -81,7 +83,7 @@ All methods are scored on the same responses.
 | Method | Removable score |
 |---|---|
 | length | characters |
-| Yap excess | characters beyond the gold minimal answer |
+| Yap excess | characters beyond the gold minimal answer, as in YapBench (arXiv:2601.00624) |
 | stop-word share | share of English stop words |
 | LLM judge | per fragment: p(filler) + p(wrong), read off the probabilities of the label words (`needed`, `filler`, `wrong`); the annotators' guidelines (`drybench/judge.py`) |
 | Selective Context | least self-information first, as many characters as the filler map deletes (`drybench/selective.py`) |

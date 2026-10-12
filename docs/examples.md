@@ -212,4 +212,5 @@ Question: *Who is hosting team heads together?* Reference: *the duchess of cambr
 | 3 | ~~Good luck to all the runners!~~ | additional information | 0.0 | filler ✓ |
 | 4 | ~~#MentalHealthAwareness #TeamHeadsTogether~~ | irrelevant | 0.0 | filler ✓ |
 
-4 of 4 agree; removable 71%. Over all labelled responses F1 is 0.87–0.89 ([results.md](results.md#checks)).
+4 of 4 agree; removable 71%. Over the scored labelled responses F1 is 0.87–0.89, 0.83–0.88 where the fact is the
+reference answer ([results.md](results.md#checks)).

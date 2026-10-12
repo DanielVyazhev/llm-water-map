@@ -29,7 +29,9 @@ flowchart TD
 
 ## Reader and information
 
-Reader: an instruction-tuned model with a fixed prompt. It never sees the source text.
+Reader: an instruction-tuned model with a fixed prompt. It never sees the source text. (One rule outside the
+reader uses it: on real texts a deleted fragment is excused as a true statement when 80% of its words occur in one
+source sentence; [below](#kind-of-a-deleted-fragment).)
 
 ```text
 system: You read a message and answer a question about it. Use only the message. Reply with a short phrase
@@ -62,8 +64,9 @@ flowchart LR
 - A fact the source does not give is asked as a yes/no question ("Does the message say that this is not stated:
   …?") for Qwen2.5-3B; such questions have a floor of 0.1 (at most 2.3 nats). Phi-3.5-mini gets the plain
   question; any reply starting with "not" is accepted.
-- The filler map protects every fact with I_j(y) ≥ 0.5 nats (a delivered fact). The **facts** metric counts facts
-  read with p_j ≥ 0.5.
+- The filler map protects every fact with I_j(y) ≥ 0.5 nats (a delivered fact): the response makes the reader's
+  answer at least e^0.5 ≈ 1.65 times as likely as no message, which can still be unlikely: with p_j(∅) at the
+  floor, p_j(y) = 1.65·10⁻⁶ counts. The **facts** metric counts facts read with p_j ≥ 0.5.
 
 ## Accepted answers in the response's own words (v1.1.0)
 
@@ -107,7 +110,8 @@ I_j(y') ≥ I_j(y) − min(τ, I_j(y) / 2)        τ = 0.5 nats
 ```
 
 Above the floor this means the reader's probability of each answer falls to no less than e^−0.5 ≈ 0.61 of its
-value. The cap I_j/2 makes deleting the only statement of a fact impossible.
+value. The cap I_j/2 keeps at least half of each delivered fact's information. The only statement of a fact can
+still go when the reader infers the fact from other fragments ([results.md](results.md#checks)).
 
 ```mermaid
 flowchart TD
@@ -121,8 +125,10 @@ flowchart TD
     S -->|queue empty| F["Deleted fragments = filler map"]
 ```
 
-Costs within 0.1% of I(y) count as equal. Reader calls per response: about 2n for n fragments (`--mode loo`, the
-default of every run). `--mode greedy` (exact greedy, O(n²)) is kept as an option.
+Costs are rounded to steps of 0.1% of I(y); equal steps count as equal. Messages read per response: n + 1 for the
+costs, then one per prefix of the queue in each round, O(n²) in the worst case; each message is read once per
+fact (development runs: about 4.5 messages on average, at most 57). `--mode loo` is the default of every run;
+`--mode greedy` (exact greedy, O(n²)) is kept as an option.
 
 ## Kind of a deleted fragment
 
