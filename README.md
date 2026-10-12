@@ -23,6 +23,26 @@ flowchart LR
   v1.0.0; to be rescored with v1.1.0.
 - Next: rescoring, the confirmation run on an A100, human labels.
 
+## Filler map vs simple metrics
+
+![Spearman correlation with the true filler share, per dataset](docs/img/filler_vs_baselines.png)
+
+Each bar: Spearman correlation between a metric's score of a response and the true share of filler in it, over the
+responses of one dataset. 1 means the metric orders the responses exactly by their filler, 0 means no relation.
+
+The responses have known filler. They consist of sentences that state the requested facts (templated on synthetic
+reports, taken from the source text on real texts) and planted filler: openers, closings, hedges, generic remarks,
+restated requests, true but unrequested sentences, summaries. On real texts one condition also plants a wrong
+statement, which counts as removable. Development runs, reader Qwen2.5-3B, v1.0.0 scores.
+
+- The filler map stays at 0.65 or above on every dataset; each simple metric fails on at least one.
+- Length tracks filler on synthetic reports and on Poddar et al., but not on SQuAD 2.0, MuSiQue and CUAD (−0.05 to
+  0.18).
+- Not in the chart: answers of 10 LLMs labelled by people (Poddar et al.). There the filler map does not beat length
+  yet (0.70 vs 0.75); the human labels of the confirmation run decide it ([docs/results.md](docs/results.md)).
+
+The chart is rebuilt by `python scripts/readme_figure.py`.
+
 ## Documents
 
 | Document | Contents |

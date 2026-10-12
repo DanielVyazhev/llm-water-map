@@ -59,6 +59,16 @@ conversational 0.83, irrelevant 0.70.
 | Pairs "shorter but more removable", ranked right: filler map / length / Yap / stop words | 0.96 / 0 / 0.47 / 0.63 | 0.83 / 0 / 0.12 / 0.76 | 0.34 / 0 / 0.09 / 0.49 |
 | Partial Spearman given length, filler map | +0.93 [0.86, 0.98] | +0.77 [0.69, 0.83] | +0.25 [0.00, 0.53] |
 
+Planted responses by dataset, Spearman with the true share (`scripts/readme_figure.py`, the chart in the README):
+
+| Dataset | Responses | Filler map | Length | Yap excess | Stop-word share |
+|---|---|---|---|---|---|
+| Synthetic reports | 96 | 0.95 | 0.63 | 0.75 | 0.07 |
+| SQuAD 2.0 | 66 | 0.65 | 0.03 | 0.06 | 0.35 |
+| MuSiQue | 89 | 0.79 | 0.18 | 0.41 | 0.51 |
+| CUAD | 68 | 0.70 | −0.05 | −0.02 | 0.22 |
+| Poddar et al. | 36 | 0.66 | 0.79 | 0.77 | 0.42 |
+
 On human labels the result depends on the responses from which the reader reads nothing:
 
 | Human-labelled responses | Spearman: filler map / length | Pairs ranked right (ties) | Partial Spearman given length |
