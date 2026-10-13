@@ -1,4 +1,4 @@
-"""v1.2: the confirmatory tests of the registered protocol (drybench.confirm)."""
+"""v1.2: the confirmatory tests of the protocol (drybench.confirm)."""
 
 import json
 from pathlib import Path

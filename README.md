@@ -23,8 +23,7 @@ flowchart LR
   runs); [CHANGELOG.md](CHANGELOG.md).
 - Results: development runs on a Colab T4 (models up to 1.7B, readers Qwen2.5-3B and Phi-3.5-mini), scored by
   v1.0.0. Being redone with v1.2.0, with the LLM judge and Selective Context.
-- Next: registration of the protocol ([docs/PROTOCOL.md](docs/PROTOCOL.md)), the confirmation run on an A100,
-  human labels.
+- Next: the confirmation run on an A100 ([docs/PROTOCOL.md](docs/PROTOCOL.md)), human labels.
 
 ## Filler map vs simple metrics
 
@@ -64,7 +63,7 @@ The chart is rebuilt by `python scripts/readme_figure.py`.
 | [docs/results.md](docs/results.md) | development runs: numbers, the v1.0.0 matching issue, open questions |
 | [docs/examples.md](docs/examples.md) | one scored response per suite and one per check |
 | [docs/running.md](docs/running.md) | install, Colab, GPU server, rescoring, inspecting a run |
-| [docs/PROTOCOL.md](docs/PROTOCOL.md) | confirmation run: what is frozen, the confirmatory tests, registration |
+| [docs/PROTOCOL.md](docs/PROTOCOL.md) | confirmation run: what is frozen, exclusions, the confirmatory tests |
 | [docs/ANNOTATION.md](docs/ANNOTATION.md) | guide for annotators |
 | [CHANGELOG.md](CHANGELOG.md) | versions |
 | [results/dev_v1.0](results/dev_v1.0/README.md) | tables and raw outputs of the development runs |

@@ -1,4 +1,4 @@
-"""The confirmatory tests of the registered protocol (docs/PROTOCOL.md): eight one-sided tests on the main
+"""The confirmatory tests of the protocol (docs/PROTOCOL.md): eight one-sided tests on the main
 reader's filler map, Holm-adjusted.
 
 H1  T1, R3      validity of the deletions on planted filler, on the responses with a filler map: a requested

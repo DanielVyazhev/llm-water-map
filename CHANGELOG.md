@@ -43,8 +43,9 @@ Comparisons and protocol (`drybench/compare.py`, `confirm.py`, `scripts/run_fina
 - Primary metrics: pairwise accuracy (all pairs and pairs of answers to the same item) and Spearman, with 95% CIs
   from bootstrap resamples of items. The filler map's fragment AUC ranks fragments by leave-one-out cost.
 - `drybench confirm`: the eight confirmatory tests (H1–H3) with Holm adjustment. The protocol lists exclusions,
-  tests and the registration; `run_final.py --print-hash`; protocol changes are logged in `protocol.json`; the code
-  hash covers the package and the four run scripts; development items and data files are hashed.
+  tests and what is fixed before the run; `run_final.py --print-hash`; protocol changes are logged in
+  `protocol.json`; the code hash covers the package and the four run scripts; development items and data files
+  are hashed.
 - `colab/dev_baselines_a100.ipynb`: the LLM judge and Selective Context on the development runs.
 - Reader agreement (Kendall τ) on the responses both readers scored, with a CI. β_ctrl also controls for
   "Explain how you found it.".

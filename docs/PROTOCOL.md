@@ -1,11 +1,11 @@
 # Protocol of the confirmation run (package v1.2.0)
 
-## Development, registration, confirmation
+## Development and confirmation
 
 ```mermaid
 flowchart LR
     D1["Development v1.0<br>t4_n20, real_t4_n15<br>design decisions"] --> D2["Development v1.2<br>t4_n20_v12, real_t4_n15_v12<br>+ LLM judge, Selective Context"]
-    D2 --> R["Registration (OSF)<br>this file, commit, code hash,<br>development items, development values"]
+    D2 --> R["Fixed before the run<br>this file, commit, code hash,<br>development items, development values"]
     R --> C["Confirmation run<br>new items, 7 models, 3 readers<br>human labels of its answers"]
 ```
 
@@ -16,7 +16,7 @@ flowchart LR
   human-labelled responses; 600 missing-fact answers labelled while the abstention rule was built.
 - v1.2 (the same design, package v1.2.0 after review): `t4_n20_v12`, `real_t4_n15_v12` on a T4, then the LLM judge
   (Phi-4) and Selective Context (Qwen2.5-3B) on both on an A100 (`colab/dev_baselines_a100.ipynb`). Its values of
-  the confirmatory statistics are the development values of the registration.
+  the confirmatory statistics go into this file before the confirmation run.
 
 **Confirmation run.** `colab/final_a100.ipynb` or `scripts/run_final.py`, package v1.2.0:
 - synthetic reports: new items (seed 1, 30 per cell, 450 items); planted-filler check T1 on items of seed 2027
@@ -105,10 +105,9 @@ annotator; the development intervals of T1 and R3 are far from the nulls, HL has
 5. Entropy: whether the generating model's span entropy flags filler above chance.
 6. The abstention rule: precision and recall on the held-out labels of 150 answers.
 
-## Registration
+## Fixed before the confirmation run
 
-Before the confirmation run starts, on OSF:
-1. the commit of the repository that runs, and this file at that commit;
+1. the commit of the repository that runs (git tag `confirmation-run`), and this file at that commit;
 2. `python scripts/run_final.py --print-hash`: package version and code hash (sha1 of `drybench/` and the four run
    scripts; `protocol.json` records the same and stops a rerun with other code);
 3. sha256 of both development items files (`results/dev_v1.0/real/items.jsonl`:
@@ -117,8 +116,9 @@ Before the confirmation run starts, on OSF:
    `colab/dev_baselines_a100.ipynb`; T1 and R3 only);
 5. the annotators: who they are and whether they took part in the development.
 
-A change after registration is a deviation: `--allow-protocol-change` logs it in `protocol.json` under "changes",
-and the paper reports it.
+A change after the run starts is a deviation: `--allow-protocol-change` logs it in `protocol.json` under
+"changes", and the paper reports it. An external timestamp (an OSF registration, private under embargo until
+submission) is optional and not made.
 
 ## After the run, by hand
 

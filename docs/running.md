@@ -47,7 +47,7 @@ python scripts/run_synthetic.py --run runs/syn_v1 --n-per-cell 30 --seed 1 --mod
     --selective qwen2.5-3b=Qwen/Qwen2.5-3B-Instruct --missing-check
 python scripts/run_real.py --run runs/real_v1                          # 4 models up to 7B by default
 python scripts/run_real.py --run runs/cuad_only --suites cuad --n-per-cell 30
-python scripts/run_final.py --print-hash                              # version and code hash for the registration
+python scripts/run_final.py --print-hash                              # version and code hash (PROTOCOL.md)
 python scripts/run_final.py --run runs/final_v1 \
     --dev-items results/dev_v1.0/real/items.jsonl runs/real_t4_n15_v12/items.jsonl   # confirmation run
 ```
@@ -108,7 +108,8 @@ new names instead of rescored:
    development values of the confirmatory tests, everything in `dev_v12_results.zip`.
 4. Compare with `results/dev_v1.0`; check `added_answers` in `scored.jsonl`, above all wordings with a comma, a
    bracket, "not" or "or" before the answer, and very short ones.
-5. Registration ([PROTOCOL.md](PROTOCOL.md#registration)), then `colab/final_a100.ipynb`.
+5. The development values and the thresholds of H1 into
+   [PROTOCOL.md](PROTOCOL.md#fixed-before-the-confirmation-run), then `colab/final_a100.ipynb`.
 
 ## Looking inside a run
 

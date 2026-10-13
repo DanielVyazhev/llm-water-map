@@ -3,7 +3,7 @@
 
     python scripts/run_final.py --run runs/final_v1 \
         --dev-items results/dev_v1.0/real/items.jsonl runs/real_t4_n15_v12/items.jsonl [settings]
-    python scripts/run_final.py --print-hash      # version and code hash for the registration
+    python scripts/run_final.py --print-hash      # version and code hash, fixed before the run
 
 Everything was designed and tuned on the development runs (the T4 runs: three models of 0.5–1.7B, synthetic
 items of seed 0, the real-text items in --dev-items, every development run). This run checks the results on
@@ -173,7 +173,7 @@ def main(argv: list[str] | None = None) -> None:
                          "are downloaded again for the second suite)")
     ap.add_argument("--allow-protocol-change", action="store_true")
     ap.add_argument("--print-hash", action="store_true",
-                    help="print the package version and the code hash (for the registration) and stop")
+                    help="print the package version and the code hash (fixed before the run) and stop")
     ap.add_argument("--allow-cpu", action="store_true")
     ap.add_argument("--backend", default="hf", choices=["hf", "mock"], help="mock: a smoke test without models")
     args = ap.parse_args(argv)
