@@ -35,7 +35,7 @@ def load_package():
     sys.path.insert(0, str(pkg))
 
 
-def find_run(run, name="t4_n20"):
+def find_run(run, name="t4_n20_v12"):
     """RUN = "auto": the main cell's folder in this session (RUN_DIR), else the run in Google Drive,
     else the one in /content; a path is used as given."""
     if run != "auto":

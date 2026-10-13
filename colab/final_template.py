@@ -9,7 +9,9 @@
 
 # ---- settings ----
 RUN_NAME = "final_v1"                # new name = fresh run; same name = resume
-DEV_ITEMS = ["/content/drive/MyDrive/drybench_runs/real_t4_n15/items.jsonl"]  # development items: their texts are left out
+# items of the v1.2 development run on real texts: their source texts are left out (the v1.0 items come with
+# the package: results/dev_v1.0/real/items.jsonl)
+DEV_ITEMS = ["/content/drive/MyDrive/drybench_runs/real_t4_n15_v12/items.jsonl"]
 MODELS = {                           # label: Hugging Face id of an evaluated (instruct) model
     "qwen2.5-0.5b": "Qwen/Qwen2.5-0.5B-Instruct",       # the development models
     "qwen2.5-1.5b": "Qwen/Qwen2.5-1.5B-Instruct",
@@ -117,8 +119,9 @@ def main():
     def pairs(d):
         return [f"{k}={v}" for k, v in d.items()]
 
+    dev_items = [pkg / "results" / "dev_v1.0" / "real" / "items.jsonl", *DEV_ITEMS]
     cmd = [sys.executable, pkg / "scripts" / "run_final.py", "--run", out, "--data", root / "data",
-           "--dev-items", *DEV_ITEMS, "--models", *pairs(MODELS), "--reader", READER,
+           "--dev-items", *dev_items, "--models", *pairs(MODELS), "--reader", READER,
            "--readers2", *pairs(READERS2), "--reader-items-per-cell", *pairs(READER_ITEMS_PER_CELL),
            "--judges", *pairs(JUDGES), "--selective", *pairs(SELECTIVE), "--seed", SEED,
            "--n-per-cell-synthetic", N_PER_CELL_SYNTHETIC, "--n-per-cell-real", N_PER_CELL_REAL,
@@ -133,7 +136,8 @@ def main():
                 display(Markdown(t.read_text()))
     except ImportError:
         pass
-    print(f"\nRun folder: {out}\nFor the annotators: {out}/annotation ({out}_annotation.zip)\nWhole run: {out}.zip")
+    print(f"\nRun folder: {out}\nFor the annotators: {out}/annotation ({out}_annotation.zip)\nWhole run: {out}.zip\n"
+          f"Confirmatory tests without the human labels: {out}/confirmatory.md")
     print(f"Total time of this session: {(time.time() - t0) / 60:.1f} min")
 
 

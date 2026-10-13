@@ -6,8 +6,11 @@ made.
 
 **Status.** Scored by v1.0.0 (scoring version 8 for the synthetic run, 7 for the real-text run; the two differ only
 on missing-fact items). On real texts v1.0.0 did not credit part of the correct answers
-([below](#answer-matching-in-v100)); v1.1.0 fixes it, the runs are to be rescored. Synthetic results should change
-little (models copy invented names verbatim); not checked yet.
+([below](#answer-matching-in-v100)); v1.1.0 fixed it. v1.2.0 changes scoring (answer matching, the deletion search,
+completeness, kinds of deleted fragments, segmentation), SQuAD 2.0 items, the truth of R3 and R4, and decoding
+(plain greedy): the development runs are redone with v1.2.0 (`t4_n20_v12`, `real_t4_n15_v12`, plus the LLM judge
+and Selective Context) and replace the numbers below. Comparison rows (pairwise accuracy, fragment ROC-AUC) are
+computed with v1.2.0's comparison code on these v1.0.0 scores.
 
 | | Synthetic | Real texts |
 |---|---|---|
@@ -43,7 +46,8 @@ The truth of R3 counts a fact as kept while any kept fragment mentions its answe
 mentions it ("VerticalNet, Inc., a Pennsylvania corporation" for the governing law), the fact is lost. Counting a
 fact as kept only by the sentence chosen to state it (and the summary): no fact lost 0.90 (Phi-3.5-mini 0.84),
 precision 0.95 (0.91); [`scripts/truth_variants.py`](../scripts/truth_variants.py). Part of the 20 (36) responses
-that change are true restatements, so the value lies between.
+that change are true restatements, so the value lies between. v1.2's R3 uses the second truth, and picks fact sentences that
+state no other requested answer.
 
 **Human labels, Poddar et al.** (R4; 125 of 189 responses scored by the main reader, 131 by Phi):
 
@@ -56,12 +60,14 @@ that change are true restatements, so the value lies between.
 
 The fact of a response is its own answer. For 41 of the 125 (Phi: 35 of 131) it is what the reader reads from the
 fragments people labelled minimal answer, so these labels enter the method. Responses whose fact is the reference
-answer (84; Phi 95): F1 0.83, κ 0.58 (Phi 0.88, 0.68).
+answer (84; Phi 95): F1 0.83, κ 0.58 (Phi 0.88, 0.68). v1.2 scores only such responses
+([validation.md](validation.md#human-labels-poddar-et-al)).
 
 Share deleted by human label (main): minimal answer 0.12, additional information 0.86, explanation 0.85,
 conversational 0.83, irrelevant 0.70.
 
-**Baselines** (T1, R5). The LLM judge and Selective Context were not run on the development runs.
+**Baselines** (T1, R5). The LLM judge and Selective Context were not run on the v1.0 development runs; the v1.2
+development runs add them.
 
 | | Synthetic, planted | Real, planted | Human labels |
 |---|---|---|---|
@@ -72,8 +78,9 @@ conversational 0.83, irrelevant 0.70.
 
 By dataset (`scripts/readme_figure.py`, the chart in the README). Pairwise accuracy: over pairs of responses whose
 true shares differ by ≥ 0.2, the share where the metric scores the response with more filler higher (ties count
-half; 50% = chance). Fragment ROC-AUC: the filler map's yes/no decisions per fragment, filler or wrong vs needed
-(equal to balanced accuracy). Responses from which the reader reads no fact are left out (real texts: 39 of 298;
+half; 50% = chance). Fragment ROC-AUC: fragments ranked by minus their leave-one-out cost (the information lost
+by deleting each alone), filler or wrong vs needed. Responses from which the reader reads no fact are left out (real
+texts: 39 of 298;
 counted as all removable, the filler map scores 81% on SQuAD 2.0, 83% on MuSiQue and CUAD, 74% on Poddar et al.).
 Over pairs of responses to the same item (28–87 pairs per dataset) length does about as well as the filler map:
 synthetic 99% vs 100%, SQuAD 2.0 95% vs 92%, MuSiQue 89% vs 86%, CUAD 83% vs 90%, Poddar et al. 100% vs 89%.
@@ -81,11 +88,11 @@ synthetic 99% vs 100%, SQuAD 2.0 95% vs 92%, MuSiQue 89% vs 86%, CUAD 83% vs 90%
 | Dataset | Responses | Pairs | Filler map | Length | Yap excess | Stop-word share | Filler map, fragment ROC-AUC |
 |---|---|---|---|---|---|---|---|
 | Synthetic reports, planted | 96 | 2380 | 99% | 88% | 94% | 51% | 0.98 |
-| SQuAD 2.0, planted | 66 | 1141 | 86% | 51% | 53% | 68% | 0.86 |
-| MuSiQue, planted | 89 | 2355 | 89% | 58% | 69% | 76% | 0.79 |
-| CUAD, planted | 68 | 1467 | 84% | 46% | 47% | 60% | 0.88 |
-| Poddar et al., planted | 36 | 349 | 84% | 95% | 94% | 69% | 0.99 |
-| Poddar et al., human labels | 111 | 3639 | 88% | 92% | 92% | 58% | 0.84 |
+| SQuAD 2.0, planted | 66 | 1141 | 86% | 51% | 53% | 68% | 0.90 |
+| MuSiQue, planted | 89 | 2355 | 89% | 58% | 69% | 76% | 0.90 |
+| CUAD, planted | 68 | 1467 | 84% | 46% | 47% | 60% | 0.94 |
+| Poddar et al., planted | 36 | 349 | 84% | 95% | 94% | 69% | 1.00 |
+| Poddar et al., human labels | 111 | 3639 | 88% | 92% | 92% | 58% | 0.90 |
 
 On human labels the result depends on the responses from which the reader reads nothing:
 
@@ -101,6 +108,7 @@ fragments people labelled minimal answer. A response without the reference answe
 (answer source "none") delivers nothing and counts as all removable; most of these have no fragment labelled
 minimal answer, so their true share is 1 by the same labels. Without them (third row) the advantage is gone. The
 last row selects responses by the truth labels. Third row: [`scripts/truth_variants.py`](../scripts/truth_variants.py).
+v1.2 removes the dependence: only responses that state the reference answer are scored.
 
 **Second reader** (T4 and per suite):
 
@@ -161,7 +169,7 @@ agrees with these labels (precision 0.99, recall 1.00; tuned on them).
 0.69–0.92 on synthetic reports, above span length in every group. On real texts: SQuAD 0.45–0.75, MuSiQue 0.47–0.56,
 CUAD and Poddar too few filler fragments. These AUCs count the fragments of responses without a filler map as
 kept. On synthetic reports filler does not grow with answer uncertainty given k, missing fact, ambiguity and hops
-(β_ctrl from −0.09 to −0.01; "explain" is not controlled for). On SQuAD it does in one of six groups (β_ctrl
+(β_ctrl from −0.09 to −0.01; "explain" is not controlled for here, v1.2 controls for it). On SQuAD it does in one of six groups (β_ctrl
 +0.06 to +0.26; Qwen2.5-1.5B default +0.26 [+0.03, +0.44]); on MuSiQue every CI includes 0.
 
 ## Pilot (CPU, GPT-2 reader)

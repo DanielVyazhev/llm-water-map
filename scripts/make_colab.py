@@ -4,7 +4,11 @@ The drybench package (code + pyproject + README) is zipped, base64-encoded and e
 the cell, so the notebook needs no uploads.
 
   python scripts/make_colab.py            → colab/drybench_colab.ipynb, colab/drybench_colab_cell.py,
-                                            real_texts_colab.ipynb, missing_check_colab.ipynb, final_a100.ipynb
+                                            real_texts_colab.ipynb, missing_check_colab.ipynb, final_a100.ipynb,
+                                            dev_baselines_a100.ipynb
+
+The embedded zip is byte-reproducible (sorted files, fixed dates and permissions): the same code gives the same
+notebooks.
 """
 
 from __future__ import annotations
@@ -20,17 +24,29 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))  # the version stamped on the notebooks is the package they embed
 
 
-def package_zip() -> bytes:
+PACKAGED = ["LICENSE", "pyproject.toml", "README.md", "scripts/pilot_validation.py", "scripts/run_real.py",
+            "scripts/run_synthetic.py", "scripts/run_final.py", "scripts/show_checks.py", "scripts/trace_response.py",
+            "scripts/chat_annotators.py", "scripts/check_abstain.py", "annotation/dry_span_labels_offline.html",
+            "docs/ANNOTATION.md", "docs/PROTOCOL.md", "results/abstain_labels.json"]
+ZIP_DATE = (2020, 1, 1, 0, 0, 0)
+
+
+# the confirmation run excludes the source texts of the v1.0 development items: the notebook ships them
+EXTRA = {"final_template.py": ["results/dev_v1.0/real/items.jsonl"]}
+
+
+def package_files(extra: tuple[str, ...] | list[str] = ()) -> list[str]:
+    return sorted(set(PACKAGED) | set(extra) | {p.relative_to(ROOT).as_posix() for p in (ROOT / "drybench").rglob("*.py")})
+
+
+def package_zip(extra: tuple[str, ...] | list[str] = ()) -> bytes:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
-        for f in ["pyproject.toml", "README.md", "scripts/pilot_validation.py", "scripts/run_real.py",
-                  "scripts/run_synthetic.py", "scripts/run_final.py", "scripts/show_checks.py",
-                  "scripts/trace_response.py", "scripts/chat_annotators.py", "scripts/check_abstain.py",
-                  "annotation/dry_span_labels_offline.html", "docs/ANNOTATION.md", "docs/PROTOCOL.md",
-                  "results/abstain_labels.json"]:
-            z.write(ROOT / f, f)
-        for p in sorted((ROOT / "drybench").rglob("*.py")):
-            z.write(p, p.relative_to(ROOT).as_posix())
+        for f in package_files(extra):
+            info = zipfile.ZipInfo(f, ZIP_DATE)
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = 0o644 << 16
+            z.writestr(info, (ROOT / f).read_bytes())
     return buf.getvalue()
 
 
@@ -39,7 +55,7 @@ def build_cell(overrides: str | None = None, template: str = "cell_template.py")
 
     tmpl = (ROOT / "colab" / template).read_text()
     cell = tmpl.replace("__VERSION__", __version__).replace(
-        "__PKG_B64__", base64.b64encode(package_zip()).decode())
+        "__PKG_B64__", base64.b64encode(package_zip(EXTRA.get(template, ()))).decode())
     if overrides is not None:  # replace the settings block (used for local dry runs)
         start, end = "# ---- settings ----\n", "# ---- end settings ----\n"
         a, b = cell.index(start) + len(start), cell.index(end)
@@ -73,7 +89,7 @@ def notebook(cell: str) -> dict:
 
     restore = ("## Optional: restore a saved run\n"
                "In a new Colab session, run this cell and pick the `.zip` that the Details cell downloaded "
-               "(e.g. `t4_n20.zip`); it goes to Google Drive, and the main cell then reuses its responses "
+               "(e.g. `t4_n20_v12.zip`); it goes to Google Drive, and the main cell then reuses its responses "
                "instead of generating them again.")
     restore_code = ("# Restore a run folder saved by the Details cell (skip in the session that made it).\n"
                     "TO_DRIVE = True  # False: into /content (lost when the runtime is recycled; set USE_DRIVE = False too)\n"
@@ -196,6 +212,37 @@ def final_notebook(cell: str) -> dict:
     }
 
 
+DEV_DOWNLOAD = """# Download both development runs with the baselines, the tables and the confirmatory statistics.
+from google.colab import files
+
+root = Path("/content/drive/MyDrive/drybench_runs") if USE_DRIVE else Path(RUN_ROOT)
+files.download(str(root / f"{ZIP_NAME}.zip"))
+"""
+
+
+def dev_baselines_notebook(cell: str) -> dict:
+    def md(text):
+        return {"cell_type": "markdown", "metadata": {}, "source": text.splitlines(keepends=True)}
+
+    def code(src):
+        return {"cell_type": "code", "metadata": {}, "execution_count": None, "outputs": [],
+                "source": src.splitlines(keepends=True)}
+
+    intro = ("# Filler in LLM answers: the LLM judge and Selective Context on the development runs (A100)\n"
+             "After the T4 development runs of this package version (synthetic reports and real texts, both in "
+             "Google Drive): Runtime → Change runtime type → **A100 GPU**, run the cell. It adds the judge (Phi-4) "
+             "and Selective Context (Qwen2.5-3B) to both runs, remakes their tables and writes the development "
+             "values of the confirmatory tests (`docs/PROTOCOL.md`).")
+    return {
+        "nbformat": 4, "nbformat_minor": 0,
+        "metadata": {"accelerator": "GPU", "colab": {"gpuType": "A100", "provenance": []},
+                     "kernelspec": {"name": "python3", "display_name": "Python 3"},
+                     "language_info": {"name": "python"}},
+        "cells": [md(intro), code(cell), md("## Download\nBoth runs and the statistics as one zip."),
+                  code(DEV_DOWNLOAD)],
+    }
+
+
 def main() -> None:
     out = ROOT / "colab"
     cell = build_cell()
@@ -210,6 +257,8 @@ def main() -> None:
     final = build_cell(template="final_template.py")
     (out / "final_a100_cell.py").write_text(final)
     (out / "final_a100.ipynb").write_text(json.dumps(final_notebook(final), indent=1))
+    dev = build_cell(template="dev_baselines_template.py")
+    (out / "dev_baselines_a100.ipynb").write_text(json.dumps(dev_baselines_notebook(dev), indent=1))
     print(f"cell: {len(cell) / 1024:.0f} KB, real-text cell: {len(real) / 1024:.0f} KB → {out}")
 
 

@@ -95,11 +95,60 @@ def write_jsonl(path: str | Path, rows: Iterable[dict[str, Any]]) -> int:
 
 
 def read_jsonl(path: str | Path) -> Iterator[dict[str, Any]]:
+    """Rows of a JSONL file. A last line that an interrupted write left unfinished is skipped with a warning
+    (append_jsonl cuts it before writing); a broken line elsewhere is an error."""
     with Path(path).open(encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if line:
-                yield json.loads(line)
+        lines = [line.strip() for line in f]
+    lines = [line for line in lines if line]
+    for n, line in enumerate(lines):
+        try:
+            yield json.loads(line)
+        except json.JSONDecodeError:
+            if n < len(lines) - 1:
+                raise
+            import warnings
+
+            warnings.warn(f"{path}: the last line is unfinished (an interrupted write); skipped", stacklevel=2)
+
+
+_REPAIRED: set[str] = set()
+
+
+def repair_jsonl(path: str | Path) -> int:
+    """Cut a last line that an interrupted write left unfinished (no final newline, or not JSON), so that the
+    next append starts on a line of its own. Returns the number of bytes cut."""
+    p = Path(path)
+    if not p.exists() or p.stat().st_size == 0:
+        return 0
+    data = p.read_bytes()
+    body, last = (data[:-1], b"") if data.endswith(b"\n") else (data, None)
+    if last is None:  # no final newline: the last line was cut while being written
+        keep = data.rfind(b"\n") + 1
+    else:
+        tail = body.rsplit(b"\n", 1)[-1]
+        try:
+            if tail.strip():
+                json.loads(tail)
+            return 0
+        except ValueError:
+            keep = len(body) - len(tail)
+    with p.open("r+b") as f:
+        f.truncate(keep)
+    return len(data) - keep
+
+
+def append_jsonl(path: str | Path, row: dict[str, Any]) -> None:
+    """Append one row; the first append to a file in this process first cuts an unfinished last line."""
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    key = str(p.resolve())
+    if key not in _REPAIRED:
+        cut = repair_jsonl(p)
+        if cut:
+            print(f"{p}: cut an unfinished last line ({cut} bytes) left by an interrupted write")
+        _REPAIRED.add(key)
+    with p.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
 def load_items(path: str | Path) -> list[Item]:

@@ -26,7 +26,7 @@ DTYPE = "fp16"                       # T4 has no bf16
 BATCH = 16                           # generation batch (halved automatically on out-of-memory)
 USE_DRIVE = True                     # keep the run in Google Drive (survives disconnects)
 RUN_ROOT = "/content/drybench_runs"  # used when USE_DRIVE = False
-RUN_NAME = "real_t4_n15"             # new name = fresh run; same name = resume
+RUN_NAME = "real_t4_n15_v12"         # new name = fresh run; same name = resume
 NO_THINKING = False                  # True for reasoning models with a thinking switch (Qwen3)
 EXTRA_ARGS = []                      # more options for scripts/run_real.py, e.g. ["--oversample", "6"]
 # ---- end settings ----

@@ -112,3 +112,43 @@ def test_first_token_logmass_matches_manual_softmax(backend):
 
         slow = LMBackend.first_token_logmass(backend, contexts[:1], single)
         assert backend.first_token_logmass(contexts[:1], single)[0] == pytest.approx(slow[0], abs=1e-4)
+
+
+# ---------------------------------------------------------------- v1.2
+
+def test_generation_ignores_the_models_own_settings(tiny_model_dir, tmp_path):
+    """Qwen2.5-0.5B/1.5B-Instruct ship repetition_penalty 1.1, which transformers applies even without
+    sampling: the backend drops it, so greedy decoding is the same for every model."""
+    import json
+    import shutil
+
+    d = tmp_path / "penalised"
+    shutil.copytree(tiny_model_dir, d)
+    (d / "generation_config.json").write_text(json.dumps(
+        {"do_sample": True, "temperature": 0.7, "top_p": 0.8, "top_k": 20, "repetition_penalty": 3.0}))
+    plain = HFBackend(str(tiny_model_dir), device="cpu")
+    pen = HFBackend(str(d), device="cpu")
+    assert pen.describe()["dropped_generation_config"]["repetition_penalty"] == 3.0
+    ctx = ["Shipment KX-1234 departed from Port Rosfen and Shipment KX-1234 departed from Port"]
+    assert pen.generate_batch(ctx, max_new_tokens=12) == plain.generate_batch(ctx, max_new_tokens=12)
+
+
+def test_generation_reports_tokens_and_whether_the_model_ended(backend):
+    out = backend.generate_batch_info(["The carrier was", "Shipment KX-1234 departed"], max_new_tokens=4)
+    for g in out:
+        assert g["n_tokens"] <= 4 and isinstance(g["finished"], bool)
+        if not g["finished"]:
+            assert g["n_tokens"] == 4
+
+
+def test_terminated_logprobs_match_the_next_token_distribution(backend):
+    ctx = "Question: How many containers?\nAnswer:"
+    for cont in (" 7", " 12"):
+        lp = backend.continuation_logprobs([(ctx, cont)])[0]
+        got = backend.terminated_logprobs([(ctx, cont)])[0]
+        ids = torch.tensor([backend._start_ids(ctx, backend.encode(ctx)) + backend.encode(cont)])
+        with torch.inference_mode():
+            nxt = torch.log_softmax(backend.model(ids).logits[0, -1].float(), -1)
+        digits = [i for i in range(len(backend.tokenizer)) if backend.tokenizer.decode([i])[:1].isdigit()]
+        p_digit = torch.logsumexp(nxt[digits], 0).exp().item()
+        assert got == pytest.approx(lp + math.log1p(-p_digit), abs=1e-4)

@@ -197,7 +197,7 @@ def law_forms(name: str, written: str | None = None) -> list[str]:
 
 
 _NUMW = ("one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|"
-         "seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|ninety")
+         "seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety")
 _DUR = (rf"(?:(?:{_NUMW})(?:[- ](?:{_NUMW}))?(?:\s*\(\d+\))?|\d+)\s+(?:calendar\s+|consecutive\s+|full\s+)?"
         r"(?:years?|months?)")
 _LEAD = r"(?:a\s+period\s+of\s+)?(?:an?\s+(?:initial\s+)?term\s+of\s+)?"
@@ -215,7 +215,8 @@ _DUR_RX = re.compile(rf"\b{_DUR}\b", re.I)
 _RENEWAL = re.compile(r"(?:renew\w*|successive|additional|extension|extend\w*|thereafter)\W+(?:[\w()]+\W+){0,5}$", re.I)
 _NUM = {w: i for i, w in enumerate("zero one two three four five six seven eight nine ten eleven twelve thirteen "
                                     "fourteen fifteen sixteen seventeen eighteen nineteen".split())}
-_NUM.update({"twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "ninety": 90})
+_NUM.update({"twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seventy": 70, "eighty": 80,
+             "ninety": 90})
 
 
 def _duration_key(text: str) -> tuple[int, str] | None:

@@ -1,9 +1,10 @@
 """Command-line pipeline.
 
   drybench items     --out items.jsonl [--n-per-cell 30] [--seed 0]
-  drybench generate  --items items.jsonl --backend hf --model Qwen/Qwen2.5-7B-Instruct --out resp.jsonl
+  drybench generate  --items items.jsonl --backend hf --model Qwen/Qwen2.5-7B-Instruct --model-name qwen2.5-7b \
+                     --variant default concise --max-new-tokens 400 --out resp.jsonl     # plain greedy decoding
   drybench score     --items items.jsonl --responses resp.jsonl --reader-backend hf \
-                     --reader Qwen/Qwen2.5-7B-Instruct --out scored.jsonl
+                     --reader Qwen/Qwen2.5-3B-Instruct --out scored.jsonl   # the reader is not an evaluated model
   drybench signals   --items items.jsonl --responses resp.jsonl --backend hf --model <same model> \
                      --model-name <label used in generate> --out signals.jsonl [--sampled 10]
   drybench analyze   --items items.jsonl --scored scored.jsonl --signals signals.jsonl --out-dir report/
@@ -26,6 +27,8 @@ Human labels of the benchmark's own answers:
   drybench annotation-sample --runs RUN_SYN RUN_REAL --out annotation/      # sample.jsonl + key.jsonl
   drybench abstain-sample    --runs RUN_SYN RUN_REAL --out annotation/      # abstain_sample.csv + key
   drybench annotation-report --sample annotation/ --labels span_labels_*.json [--abstain-csv filled.csv]
+The confirmatory tests of docs/PROTOCOL.md:
+  drybench confirm --run RUN --labels span_labels_*.json
 
 All writers append and skip rows already present, so interrupted runs resume.
 """
@@ -44,7 +47,7 @@ from drybench.entropy import answer_entropy_first_token, answer_entropy_sampled,
 from drybench.items import evaluated_model_messages, generate_items
 from drybench.reader import Reader
 from drybench.segment import segment
-from drybench.types import load_items, read_jsonl, write_jsonl
+from drybench.types import append_jsonl, load_items, read_jsonl, write_jsonl
 from drybench.filler import dry_score
 
 
@@ -95,9 +98,7 @@ def _done_keys(path: str, fields: tuple[str, ...]) -> set[tuple]:
 
 
 def _append(path: str, row: dict) -> None:
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "a", encoding="utf-8") as f:
-        f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    append_jsonl(path, row)
 
 
 def cmd_items(args: argparse.Namespace) -> None:
@@ -131,15 +132,17 @@ def cmd_filter_items(args: argparse.Namespace) -> None:
     from drybench import SCORING_VERSION
 
     pool = [it for path in args.items for it in load_items(path)]
-    if args.exclude_items:  # e.g. the items of the development runs: a held-out confirmation run
-        from drybench.realdata import source_key
-
-        used = {source_key(it) for path in args.exclude_items for it in load_items(path)}
-        n0 = len(pool)
-        pool = [it for it in pool if source_key(it) not in used]
-        print(f"left out {n0 - len(pool)} pool items whose source text (paragraph, question set, contract, "
-              f"labelled question) is used by {', '.join(args.exclude_items)}")
     keep = load_items(args.keep) if args.keep and Path(args.keep).exists() else []
+    if args.exclude_items:  # e.g. the items of the development runs: a held-out confirmation run
+        from drybench.realdata import source_keys
+
+        used = set().union(*(source_keys(it) for path in args.exclude_items for it in load_items(path)))
+        n0, k0 = len(pool), len(keep)
+        pool = [it for it in pool if not source_keys(it) & used]
+        keep = [it for it in keep if not source_keys(it) & used]  # v1.2: --keep no longer bypasses this
+        print(f"left out {n0 - len(pool)} pool items and {k0 - len(keep)} kept items whose source text (paragraph, "
+              f"question or step of a MuSiQue question, contract, labelled question) is used by "
+              f"{', '.join(args.exclude_items)}")
     reader = Reader.for_backend(_make(args, "reader"))
     kept, stats = filter_items(reader, pool, n_per_cell=args.n_per_cell, max_prior=args.max_prior,
                                min_gold_p=args.min_gold_p, keep=keep)
@@ -151,26 +154,33 @@ def cmd_filter_items(args: argparse.Namespace) -> None:
         print(f"  {key}: kept {st['kept']} ({prev}checked {st['checked']} of {st['pool']}: reader knew a fact in "
               f"{st['known']}, could not read the gold answer in {st['unreadable']}){short}")
     if args.report:
-        Path(args.report).parent.mkdir(parents=True, exist_ok=True)
-        Path(args.report).write_text(json.dumps({"reader": args.reader, "max_prior": args.max_prior,
-                                                 "min_gold_p": args.min_gold_p, "n_per_cell": args.n_per_cell,
-                                                 "scoring": SCORING_VERSION, "cells": stats}, indent=1))
+        path = Path(args.report)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        rep = {"reader": args.reader, "max_prior": args.max_prior, "min_gold_p": args.min_gold_p,
+               "n_per_cell": args.n_per_cell, "scoring": SCORING_VERSION, "cells": stats}
+        if args.keep and path.exists():  # a top-up: keep the earlier filters' counts (v1.2; up to v1.1 overwritten)
+            old = json.loads(path.read_text())
+            rep["earlier"] = (old.get("earlier") or []) + [{k: v for k, v in old.items() if k != "earlier"}]
+        path.write_text(json.dumps(rep, indent=1))
 
 
 def _is_oom(e: BaseException) -> bool:
     return "out of memory" in str(e).lower()
 
 
-def _generate_safe(backend, ctxs: list[str], args: argparse.Namespace) -> list[str]:
-    """Generate a batch; on a CUDA out-of-memory error, split it in two and retry (long documents).
+def _generate_safe(backend, ctxs: list[str], args: argparse.Namespace) -> list[dict]:
+    """Generate a batch (text, new tokens, ended by the model); on a CUDA out-of-memory error, split it in two
+    and retry (long documents).
 
     The retry runs after the except block has exited: while it runs, the exception's traceback
     keeps the failed call's frames (and their KV cache) alive, so nothing could be freed."""
-    gen_batch = getattr(backend, "generate_batch", None)
     try:
-        if gen_batch:
-            return gen_batch(ctxs, max_new_tokens=args.max_new_tokens, temperature=args.temperature, seed=args.seed)
-        return [backend.generate(c, args.max_new_tokens, args.temperature, seed=args.seed) for c in ctxs]
+        info = getattr(backend, "generate_batch_info", None)
+        if info is not None:
+            return info(ctxs, max_new_tokens=args.max_new_tokens, temperature=args.temperature, seed=args.seed)
+        texts = backend.generate_batch(ctxs, max_new_tokens=args.max_new_tokens, temperature=args.temperature,
+                                       seed=args.seed)
+        return [{"text": t, "n_tokens": None, "finished": None} for t in texts]
     except RuntimeError as e:  # torch.cuda.OutOfMemoryError is a RuntimeError
         if not _is_oom(e) or len(ctxs) == 1:
             raise
@@ -185,6 +195,31 @@ def _generate_safe(backend, ctxs: list[str], args: argparse.Namespace) -> list[s
     return _generate_safe(backend, ctxs[:half], args) + _generate_safe(backend, ctxs[half:], args)
 
 
+def _gen_settings(args: argparse.Namespace) -> dict:
+    """What decides a response besides the item: stored with every response, the same for one label."""
+    return {"model_id": args.model, "max_new_tokens": args.max_new_tokens, "temperature": args.temperature,
+            "seed": args.seed if args.temperature > 0 else None, "dtype": args.dtype,
+            "chat_template_kwargs": json.loads(args.chat_template_kwargs) if args.chat_template_kwargs else None,
+            "decoding": "plain"}  # v1.2: no generation settings from the model's config (repetition penalty)
+
+
+def _check_settings(path: str, match: dict, key: str, settings: dict, what: str) -> None:
+    """Refuse to append rows made with other settings than the rows already in `path` that match `match`."""
+    if not Path(path).exists():
+        return
+    old = [r.get(key) for r in read_jsonl(path) if all(r.get(k, "default") == v for k, v in match.items())]
+    if not old:
+        return
+    if any(o is None for o in old):
+        raise SystemExit(f"{path}: {what} without stored settings (made before v1.2) — write to a new file or "
+                         f"label, or remove them first")
+    diff = {k: (o.get(k), v) for o in old for k, v in settings.items() if o.get(k) != v}
+    if diff:
+        raise SystemExit(f"{path}: {what} were made with other settings: "
+                         + "; ".join(f"{k}: {a!r} there, {b!r} now" for k, (a, b) in diff.items())
+                         + " — write to a new file or label")
+
+
 def cmd_generate(args: argparse.Namespace) -> None:
     items = load_items(args.items)
     done = _done_keys(args.out, ("model", "variant", "item_id"))
@@ -193,16 +228,38 @@ def cmd_generate(args: argparse.Namespace) -> None:
     if not todo:
         print(f"generate: nothing to do for {label}", file=sys.stderr)
         return
+    settings = _gen_settings(args)
+    _check_settings(args.out, {"model": label}, "gen", settings, f"responses of {label}")
     backend = _make(args)
+    info = backend.describe()
+    settings = {**settings, "revision": info.get("revision"), "loaded_dtype": info.get("dtype")}
+    _check_settings(args.out, {"model": label}, "gen", settings, f"responses of {label}")
+    if info.get("dropped_generation_config"):
+        print(f"{label}: not used from the model's generation config: {info['dropped_generation_config']}",
+              file=sys.stderr)
     ctx = {(v, it.item_id): backend.format_chat(evaluated_model_messages(it, v)) for v, it in todo}
     todo.sort(key=lambda t: len(ctx[(t[0], t[1].item_id)]))  # similar lengths per batch: less padding
+    cut = 0
     for start in range(0, len(todo), args.batch_size):
         chunk = todo[start: start + args.batch_size]
         outs = _generate_safe(backend, [ctx[(v, it.item_id)] for v, it in chunk], args)
-        for (v, it), text in zip(chunk, outs):
-            _append(args.out, {"item_id": it.item_id, "model": label, "variant": v,
-                               "response": text.strip()})
+        for (v, it), g in zip(chunk, outs):
+            truncated = None if g.get("finished") is None else (not g["finished"])
+            cut += bool(truncated)
+            _append(args.out, {"item_id": it.item_id, "model": label, "variant": v, "response": g["text"].strip(),
+                               "n_tokens": g.get("n_tokens"), "truncated": truncated, "gen": settings})
         print(f"generated {min(start + args.batch_size, len(todo))}/{len(todo)} [{label}]", file=sys.stderr)
+    if cut:
+        print(f"{label}: {cut} of {len(todo)} responses cut at {args.max_new_tokens} new tokens", file=sys.stderr)
+
+
+def _score_settings(args: argparse.Namespace) -> dict:
+    from drybench import SCORING_VERSION
+
+    return {"reader": args.reader, "scoring": SCORING_VERSION, "mode": args.mode, "abs_tol": args.abs_tol,
+            "delta": args.delta, "constraint": args.constraint, "segment": args.segment,
+            "own_wording": not args.gold_forms_only, "keep_first": not args.no_keep_first,
+            "ablation_abs_tol": args.ablation_abs_tol, "ablation_delta": args.ablation_delta, "dtype": args.reader_dtype}
 
 
 def cmd_score(args: argparse.Namespace) -> None:
@@ -213,16 +270,21 @@ def cmd_score(args: argparse.Namespace) -> None:
     if not rows:
         print("score: nothing to do", file=sys.stderr)
         return
+    settings = _score_settings(args)
+    _check_settings(args.out, {}, "settings", settings, "scored rows")
     reader = Reader.for_backend(_make(args, "reader"))
+    settings = {**settings, "revision": reader.backend.describe().get("revision")}
+    _check_settings(args.out, {}, "settings", settings, "scored rows")
     device = _device_name(reader.backend)
     for n, r in enumerate(rows, 1):
         t0 = time.perf_counter()
         res = dry_score(reader, items[r["item_id"]], r["response"], delta=args.delta,
                         mode=args.mode, segment_mode=args.segment, constraint=args.constraint,
-                        abs_tol=args.abs_tol, own_wording=not args.gold_forms_only)
+                        abs_tol=args.abs_tol, own_wording=not args.gold_forms_only,
+                        keep_first=not args.no_keep_first)
         row = {"item_id": r["item_id"], "model": r["model"], "variant": r.get("variant", "default"),
-               **res.to_dict(), "own_wording": not args.gold_forms_only,
-               "seconds": round(time.perf_counter() - t0, 4), "device": device}
+               **res.to_dict(), "own_wording": not args.gold_forms_only, "truncated": r.get("truncated"),
+               "seconds": round(time.perf_counter() - t0, 4), "device": device, "settings": settings}
         if args.ablation_delta is not None or args.ablation_abs_tol is not None:
             # a second tolerance on the same response; cheap, the reader cache holds most messages
             d = args.delta if args.ablation_delta is None else args.ablation_delta
@@ -230,7 +292,8 @@ def cmd_score(args: argparse.Namespace) -> None:
             t0 = time.perf_counter()
             ab = dry_score(reader, items[r["item_id"]], r["response"], delta=d, mode=args.mode,
                            segment_mode=args.segment, constraint=args.constraint, abs_tol=t,
-                           with_kappa=False, own_wording=not args.gold_forms_only)
+                           with_kappa=False, own_wording=not args.gold_forms_only,
+                           keep_first=not args.no_keep_first)
             row["ablation"] = {"delta": d, "abs_tol": t, "W": ab.W, "W_filler": ab.W_filler,
                                "W_misleading": ab.W_misleading, "tokens_kept": ab.tokens_kept,
                                "seconds": round(time.perf_counter() - t0, 4)}
@@ -458,6 +521,24 @@ def cmd_annotation_report(args: argparse.Namespace) -> None:
     print(f"written: {out}")
 
 
+def cmd_confirm(args: argparse.Namespace) -> None:
+    from drybench.confirm import confirm, markdown
+
+    run = Path(args.run) if args.run else None
+    syn = args.synthetic or (run / "synthetic" if run else None)
+    real = args.real or (run / "real" if run else None)
+    ann = args.annotation or (run / "annotation" if run else None)
+    if not (syn or real or ann):
+        raise SystemExit("give --run, or --synthetic / --real / --annotation")
+    t, parts = confirm(syn, real, ann, args.labels, args.primary, n_boot=args.n_boot)
+    text = markdown(t, parts, args.n_boot)
+    out = Path(args.out) if args.out else (run / "confirmatory.md" if run else None)
+    print(text)
+    if out:
+        out.write_text(text, encoding="utf-8")
+        print(f"written: {out}")
+
+
 def cmd_analyze(args: argparse.Namespace) -> None:
     from drybench.analysis import analyze, build_tables, group_summary
 
@@ -476,9 +557,10 @@ def cmd_analyze(args: argparse.Namespace) -> None:
                if name in ("profiles", "attribution", "attribution_enrichment", "groups")}
     (out / "summary.json").write_text(json.dumps(summary, indent=1))
     try:
+        from drybench.analysis import without_missing
         from drybench.plots import report_figures
 
-        figs = report_figures(item_df, res, out)
+        figs = report_figures(without_missing(item_df, span_df)[0], res, out)  # as the tables: no missing-fact items
         print("figures:", ", ".join(p.name for p in figs))
     except ImportError:
         print("matplotlib not installed: skipping figures")
@@ -537,7 +619,7 @@ def main(argv: list[str] | None = None) -> None:
     g.add_argument("--model-name", default=None, help="label stored with the responses")
     g.add_argument("--variant", nargs="+", default=["default"], choices=["default", "concise"],
                    help="one or more prompt variants (model is loaded once)")
-    g.add_argument("--max-new-tokens", type=int, default=512)
+    g.add_argument("--max-new-tokens", type=int, default=320, help="development runs 320, confirmation run 400")
     g.add_argument("--batch-size", type=int, default=16)
     g.add_argument("--temperature", type=float, default=0.0)
     g.add_argument("--seed", type=int, default=0)
@@ -554,7 +636,8 @@ def main(argv: list[str] | None = None) -> None:
                    help="also score with this relative tolerance and store it under 'ablation'")
     s.add_argument("--ablation-abs-tol", type=float, default=None,
                    help="also score with this absolute tolerance (nats) and store it under 'ablation'")
-    s.add_argument("--mode", default="greedy", choices=["greedy", "loo"])
+    s.add_argument("--mode", default="loo", choices=["greedy", "loo"],
+                   help="loo: the leave-one-out search of every run; greedy: exact greedy search, O(n²)")
     s.add_argument("--constraint", default="per_probe", choices=["per_probe", "global"])
     s.add_argument("--abs-tol", type=float, default=0.5, help="per-probe slack in nats")
     s.add_argument("--segment", default="sentence", choices=["sentence", "clause"])
@@ -562,6 +645,8 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("--gold-forms-only", action="store_true",
                    help="accept only the gold answer's forms, not the response's own wording of a fact "
                         "(how v1.0.0 scored; for comparison)")
+    s.add_argument("--no-keep-first", action="store_true",
+                   help="of two statements of a fact, keep whichever the search keeps (up to v1.1), not the first")
     s.set_defaults(fn=cmd_score)
 
     sg = sub.add_parser("signals", help="entropy signals of the evaluated model")
@@ -654,6 +739,17 @@ def main(argv: list[str] | None = None) -> None:
     arp.add_argument("--abstain-csv", default=None, help="abstain_sample.csv with the label column filled in")
     arp.add_argument("--out", default=None)
     arp.set_defaults(fn=cmd_annotation_report)
+
+    cf = sub.add_parser("confirm", help="the confirmatory tests of docs/PROTOCOL.md (H1-H3, Holm-adjusted)")
+    cf.add_argument("--run", default=None, help="a confirmation run: RUN/synthetic, RUN/real, RUN/annotation")
+    cf.add_argument("--synthetic", default=None, help="a synthetic run folder (T1: filler_check/)")
+    cf.add_argument("--real", default=None, help="a real-text run folder (R3: filler_check_real/)")
+    cf.add_argument("--annotation", default=None, help="the annotation folder (HL)")
+    cf.add_argument("--labels", nargs="*", default=[], help="label exports of the labelling page (HL)")
+    cf.add_argument("--primary", default=None, help="annotator whose labels are the truth (default: the most complete)")
+    cf.add_argument("--n-boot", type=int, default=2000)
+    cf.add_argument("--out", default=None, help="markdown (default: RUN/confirmatory.md)")
+    cf.set_defaults(fn=cmd_confirm)
 
     an = sub.add_parser("analyze", help="profiles and attribution")
     an.add_argument("--items", required=True)

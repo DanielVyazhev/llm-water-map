@@ -8,7 +8,7 @@ READER2 = "microsoft/Phi-3.5-mini-instruct"  # another model family than the mai
 LABEL2 = "phi3.5-mini"
 DTYPE = "fp16"                                # T4 has no bf16
 FILLER_CHECK_N = 3                             # simulated items per cell for the filler-map check (0 = skip)
-FULL_RUN = False                              # True: allow scoring every response from scratch (~60 min on a T4)
+FULL_RUN = True                               # False: only compare scores already there (never start ~60 min of scoring)
 # ---- end settings ----
 
 import glob
@@ -127,7 +127,7 @@ def compare(out, r2):
     print(f"\nAll tables: {r2 / 'report'}")
 
 
-def find_run(run, name="t4_n20"):
+def find_run(run, name="t4_n20_v12"):
     """RUN = "auto": the main cell's folder in this session (RUN_DIR), else the run in Google Drive,
     else the one in /content; a path is used as given."""
     if run != "auto":

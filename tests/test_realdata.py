@@ -193,3 +193,88 @@ def test_cli_real_items_and_filter(tmp_path):
     main(["score", "--items", str(out), "--responses", str(resp), "--out", str(scored), "--reader-backend", "mock",
           "--mode", "loo"])
     assert sum(1 for _ in open(scored)) == len(kept)
+
+
+# ---------------------------------------------------------------- v1.2
+
+def test_squad_accepts_spans_that_agree_with_the_majority():
+    from drybench.realdata import _squad_fact
+
+    context = "The Miller–Urey experiment tested the origin of life. Chicago Pile-1 was the first reactor."
+    qa = {"id": "q1", "question": "What was the name of the experiment that tested how life originated?",
+          "answers": [{"text": "Miller–Urey experiment", "answer_start": 4},
+                      {"text": "Miller–Urey", "answer_start": 4},
+                      {"text": "Miller–Urey experiment", "answer_start": 4},
+                      {"text": "Chicago Pile-1", "answer_start": context.index("Chicago")}]}
+    f = _squad_fact(qa)
+    assert f["value"] == "Miller–Urey experiment" and "Miller–Urey" in f["forms"]  # overlaps the majority
+    assert not any("Chicago" in x for x in f["forms"])                            # one annotator elsewhere
+    qa2 = {"id": "q2", "question": "What type of civil war was fought between the warlords?",
+           "answers": [{"text": "vicious and destructive", "answer_start": 10},
+                       {"text": "vicious and destructive", "answer_start": 10}, {"text": "civil", "answer_start": 40}]}
+    assert not any(x.lower() == "civil" for x in _squad_fact(qa2)["forms"])        # in the question itself
+
+
+def test_squad_questions_of_one_request_do_not_share_answers():
+    from drybench.realdata import _compatible
+
+    x = {"question": "In what group of compounds is oxygen a necessary part?", "value": "organic",
+         "forms": ["organic", "Organic"]}
+    y = {"question": "What type of compounds such as acetone contain oxygen?", "value": "organic solvents",
+         "forms": ["organic solvents", "Organic solvents"]}
+    assert not _compatible(x, [y])  # "organic" starts "organic solvents": one reply would count for both
+    m = {"question": "What treaty is the Social Chapter not a chapter of?", "value": NOT_STATED,
+         "forms": ["not stated"], "plausible": ["Maastricht Treaty"]}
+    z = {"question": "The Social Chapter is a chapter of what treaty?", "value": "Maastricht Treaty",
+         "forms": ["Maastricht Treaty"]}
+    assert not _compatible(z, [m])  # the unanswerable question was written from this one
+
+
+def test_musique_exclusion_covers_the_steps_of_a_composed_question():
+    from drybench.realdata import source_keys
+    from drybench.types import Item, Probe
+
+    def item(mid):
+        return Item("m", "doc", "req", [Probe("q?", ["a"])], "a.", {"source": "musique"},
+                    {"source": "musique", "musique_id": mid})
+
+    a, b = item("3hop1__699507_792411_51423"), item("3hop1__702699_792411_51423")
+    assert source_keys(a) & source_keys(b) == {"musique-step:792411", "musique-step:51423"}
+    assert not source_keys(a) & source_keys(item("2hop__1_2"))
+
+
+def test_poddar_match_needs_every_content_word_and_number():
+    from drybench.poddar import best_match
+
+    assert best_match("He is visited by the spirits.", "he is an author") is None
+    assert best_match("Symptoms last 5 to 7 days.", "3 to 5 days") is None
+    assert best_match("It takes 15 to 20 minutes.", "15 to 20 minutes") == "15 to 20 minutes"
+    assert best_match("The Duchess of Cambridge hosts them.", "the duchess of cambridge") == "Duchess of Cambridge"
+
+
+def test_fill_keeps_backslashes():
+    from drybench.realdata import _fill
+
+    assert _fill("Who founded #1?", ["Ke\\dha"]) == "Who founded Ke\\dha?"
+
+
+def test_filter_top_up_keeps_earlier_counts_and_excludes_kept_items(tmp_path):
+    """v1.2: a top-up (--keep) no longer overwrites the first filter's counts, and --exclude-items applies to
+    the kept items too."""
+    squad = tmp_path / "squad.json"
+    paras = _squad_fixture()
+    squad.write_text(json.dumps({"version": "v2.0", "data": [
+        {"title": "Normans", "paragraphs": [{"context": paras[0]["context"], "qas": paras[0]["qas"]}]}]}))
+    pool, out, rep = tmp_path / "p.jsonl", tmp_path / "items.jsonl", tmp_path / "rep.json"
+    main(["real-items", "--source", "squad2", "--path", str(squad), "--n-per-cell", "2", "--out", str(pool)])
+    filt = ["filter-items", "--items", str(pool), "--out", str(out), "--report", str(rep), "--n-per-cell", "1",
+            "--reader-backend", "mock"]
+    main(filt)
+    first = json.loads(rep.read_text())
+    assert load_items(out) and "earlier" not in first
+    dev = tmp_path / "dev.jsonl"
+    dev.write_text(out.read_text())
+    main(filt + ["--keep", str(out), "--exclude-items", str(dev)])
+    second = json.loads(rep.read_text())
+    assert second["earlier"][0]["cells"] == first["cells"]
+    assert not load_items(out)  # every kept item and pool item comes from the excluded paragraph

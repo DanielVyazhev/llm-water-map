@@ -42,7 +42,8 @@ user:   Request: {request}
 ```
 
 For fact j with accepted answers A_j, p_j is the teacher-forced probability that the reply starts with one of
-them (summed over A_j; A_j is prefix-free).
+them (summed over A_j; A_j is prefix-free). An answer that ends in a digit counts only if the reply does not go on
+with a digit: "70" is not the start of "700" (v1.2).
 
 ```text
 I_j(y) = max(ln p_j(y), ln ε) − max(ln p_j(∅), ln ε)        ε = 10⁻⁶
@@ -89,8 +90,11 @@ flowchart TD
 - The lead in front of the answer stops at `, ( ) [ ] : ; . ! ?`, a spaced dash and words that join or oppose
   another answer (not, or, and, than, renew…). A candidate never starts with a different answer ("David
   Schwimmer, not Matthew Perry").
-- Bare numbers and candidates of 2 characters or fewer are not offered: with "starts with" scoring "5" also
-  covers "50".
+- An answer that is part of a longer word or name gets no lead, only its own wording: "twenty-five" or "twenty
+  five" for "five", "West Virginia" for "Virginia", "John Quincy Adams" for "Adams" when a gold form has two
+  capitalised words (v1.2). A title keeps the name ("King George VI" for "George VI"), and so do words of the
+  gold forms and of the question.
+- Bare numbers and candidates of 2 characters or fewer are not offered, except CUAD dates and terms found by value.
 - The same is done for each deleted fragment read alone (next sections), so a fact restated in other words is a
   repeat, not a wrong statement.
 - A response that states every fact in the gold's words scores as in v1.0.0. Scored rows store the added
@@ -98,8 +102,10 @@ flowchart TD
 
 ## Fragments
 
-Sentences and list lines (`drybench/segment.py`). A list number ("2.") stays with its line. Messages are rebuilt
-from the remaining fragments joined by spaces.
+Sentences and list lines (`drybench/segment.py`). A list number ("2.") stays with its line. A full stop after an
+abbreviation ("Inc.", "Nov.", "St.", "No. 5") or an initial after a name ("Rajendra K. Pachauri") does not end a
+sentence (v1.2). Messages are rebuilt from the remaining fragments joined by spaces; the gold answer is read the
+same way.
 
 ## Deletion search
 
@@ -122,36 +128,45 @@ flowchart TD
     T --> P["Delete the longest prefix that passes"]
     P --> S["Skip the fragment that ended the prefix"]
     S -->|queue not empty| T
-    S -->|queue empty| F["Deleted fragments = filler map"]
+    S -->|queue empty| K["Keep the first statement<br>of each fact"]
+    K --> F["Deleted fragments = filler map"]
 ```
 
+**First statement stays (v1.2).** When the search keeps a later statement of a fact and deletes an earlier one
+(the later is often shorter), the result contradicts the annotation guidelines ("the first full statement is
+needed, later repeats are filler"). After the search, for each kept candidate from the last one: the deleted
+statements before it (fragments that alone give a delivered fact, as a repeat does, and are not wrong statements)
+come back and it goes, if every delivered fact stays within the tolerance; restored statements that are not
+needed then go again, the latest first.
+
 Costs are rounded to steps of 0.1% of I(y); equal steps count as equal. Messages read per response: n + 1 for the
-costs, then one per prefix of the queue in each round, O(n²) in the worst case; each message is read once per
-fact (development runs: about 4.5 messages on average, at most 57). `--mode loo` is the default of every run;
+costs, then one per prefix of the queue in each round, O(n²) in the worst case, then the first-statement pass;
+each message is read once per fact (development runs: about 4.5 messages on average, at most 57). `--mode loo` is the default of every run;
 `--mode greedy` (exact greedy, O(n²)) is kept as an option.
 
 ## Kind of a deleted fragment
 
-Each deleted fragment is read alone by the same reader.
+Each deleted fragment is read alone by the same reader. A wrong statement takes priority over a repeat (v1.2:
+a summary with a wrong value is wrong, not filler).
 
 ```mermaid
 flowchart TD
-    X["Deleted fragment, read alone"] --> D{"Gives a delivered fact j at least<br>max(0.5, I_j(y) / 2) nats?"}
-    D -->|yes| R["Repeat → filler"]
-    D -->|no| W{"p of a wrong answer ≥ 0.5,<br>and below 0.5 with no message?"}
-    W -->|no| U["Uninformative → filler"]
+    X["Deleted fragment, read alone"] --> W{"p of a wrong answer ≥ 0.5,<br>and below 0.5 with no message?"}
     W -->|yes| E{"Excused?"}
     E -->|no| M["Wrong statement"]
     E -->|yes| T{"Excuse is 'true statement'<br>and the fragment answers<br>question j itself?"}
     T -->|yes| M
-    T -->|no| U
+    T -->|no| D
+    W -->|no| D{"Gives a delivered fact j at least<br>max(0.5, I_j(y) / 2) nats?"}
+    D -->|yes| R["Repeat → filler"]
+    D -->|no| U["Uninformative → filler"]
 ```
 
 - Wrong answer: any reply except the accepted answers and non-answers ("unknown", "not…", an echo of the
   question's shipment id).
 - Excuses: no words beyond the request (a header such as "For shipment KJ-3299:"); synthetic reports: another
-  shipment, or a true value next to its own attribute; real texts: a true statement, i.e. 80% of its words occur
-  in one sentence of the source.
+  shipment (named, and not the requested one), or a true value next to its own attribute; real texts: a true
+  statement, i.e. 80% of its words occur in one sentence of the source.
 - "Answers question j itself": carries j's number in a numbered request, or at least 60% (and 2) of the content
   words of question j. A true sentence of the source can still be the wrong answer.
 
@@ -164,7 +179,7 @@ flowchart TD
 | wrong statements | share of tokens in wrong statements | `W_misleading` |
 | facts | share of facts read at p ≥ 0.5, among the facts the reader reads from the gold at p ≥ 0.5 | `facts` |
 | complete answers | share of responses with every fact read | tables |
-| completeness C | Σ_j max(I_j(y), 0) / I(y°), y° = gold minimal answer | `kappa` |
+| completeness C | Σ_j min(max(I_j(y), 0), max(I_j(y°), 0)) / Σ_j max(I_j(y°), 0), y° = gold minimal answer: per fact capped at the gold's information (v1.2) | `kappa` |
 | overhead | \|y\| / (C · \|y°\|): tokens per delivered nat relative to the gold | `overhead` |
 | density | I(y) / ln 2 / \|y\| bits per token | `density_bits_per_token` |
 
@@ -179,8 +194,10 @@ flowchart LR
 - ×removable: whole fragments that can go. ×wordiness: needed fragments written long ("The carrier for shipment
   NB-3618 was Dralor Cargo." vs "Carrier: Dralor Cargo."). The filler map works on whole fragments and cannot cut
   inside one.
-- A response from which the reader reads less than 1 nat delivers nothing: no filler map; facts count it as
-  failed. A gold answer the reader cannot read (< 1 nat): the response is not scored.
+- A response from which the reader reads less than 1 nat of positive information over all facts delivers
+  nothing (`no_signal`; v1.2 sums the positive parts, so a contradicted fact does not hide another): no filler
+  map; facts count it as failed; in comparisons all of it is removable. A gold answer the reader cannot read
+  (< 1 nat): the response is not scored (`reader_fail`).
 
 ## Facts the source does not give
 
@@ -197,8 +214,11 @@ flowchart LR
     Q -->|no| V
 ```
 
-Against the hand labels: precision 0.99, recall 1.00 (tuned on the same answers; a held-out check is part of the
-confirmation run). Items with a missing fact are left out of every filler table and reported separately.
+v1.2 reads the answer clause by clause (";", "but" and "however" start a new clause), so "cannot determine X, but
+the carrier was Y" says that X is not given and not that the carrier is unknown; it also knows more phrases
+("cannot be determined", "N/A", "not applicable", "no clause on…"). Against the hand labels: precision 0.99,
+recall 1.00 (tuned on the same answers; a held-out check is part of the confirmation run). Items with a missing
+fact are left out of every filler table and reported separately.
 
 ## Entropy signals of the generating model
 
@@ -224,6 +244,7 @@ from the model that wrote the text: scored by GPT-2, assistant boilerplate is no
 | Option | Effect |
 |---|---|
 | `--gold-forms-only` | accepted answers from the gold only (v1.0.0) |
+| `--no-keep-first` | no first-statement pass (v1.1.0 search) |
 | `--ablation-abs-tol 2` | stores the removable share at τ = 2 nats next to each score |
 | `--constraint global` | one budget for the total I(y) instead of per fact; loses low-information facts |
 | `--mode greedy` | exact greedy search, O(n²) reader calls |

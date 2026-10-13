@@ -58,12 +58,20 @@ def test_sample_is_item_wise_balanced_and_blind(run, tmp_path):
     assert sum(a != b for a, b in zip(order, order[1:])) == len(per_item) - 1
     # the same seed gives the same sample
     assert build_sample([run], items_per_source=4, per_item=4, min_distinct=3, seed=1)[0] == sample
+    # uids carry the sample's id: labels of one sample cannot name another sample's responses
+    import re
+
+    prefixes = {s["uid"].split("-")[0] for s in sample}
+    assert len(prefixes) == 1 and all(re.fullmatch(r"s[0-9a-f]{6}-r\d{3}", s["uid"]) for s in sample)
+    other = build_sample([run], items_per_source=4, per_item=4, min_distinct=3, seed=2)[0]
+    assert {s["uid"].split("-")[0] for s in other} != prefixes
     write_sample(tmp_path, sample, key, stats)
     cases = sample_cases(tmp_path)
     assert len(cases) == len(sample) and cases[0]["group"].startswith("syn/")
 
 
-def _export(path: Path, annotator: str, sample, flip_every: int = 0, fmt: str = "span-labels/1") -> None:
+def _export(path: Path, annotator: str, sample, flip_every: int = 0, fmt: str = "span-labels/1", name: str = "",
+            ts: int = 1) -> None:
     """A page export whose labels follow the filler map of the key (flipping some to disagree)."""
     recs = []
     for n, s in enumerate(sample):
@@ -74,8 +82,40 @@ def _export(path: Path, annotator: str, sample, flip_every: int = 0, fmt: str = 
                 lab = "needed" if lab == "filler" else "filler"
             labs.append(lab)
         recs.append({"uid": s["uid"], "annotator": annotator, "span_i": [sp["i"] for sp in s["spans"]],
-                     "labels": labs, "also_needed": [], "unsure": [], "complete": True, "ts": 1})
-    path.write_text(json.dumps({"format": fmt, "records": recs}))
+                     "labels": labs, "also_needed": [], "unsure": [], "complete": True, "ts": ts})
+    doc = {"format": fmt, "records": recs}
+    if name:
+        doc["annotators"] = [{"id": annotator, "name": name, "self": True}]
+    path.write_text(json.dumps(doc))
+
+
+def test_exports_of_one_annotator_are_merged_and_other_samples_refused(run, tmp_path):
+    from drybench.annotate import page_hash
+
+    sample, key, stats = build_sample([run], items_per_source=4, per_item=3, min_distinct=3)
+    # one annotator exports twice (a re-export after fixing labels): one annotator, the later labels
+    _export(tmp_path / "anna_1.json", "local-3f9a2c", sample, name="Anna", ts=1)
+    _export(tmp_path / "anna_2.json", "local-3f9a2c", sample, flip_every=4, name="Anna", ts=2)
+    _export(tmp_path / "anna_b.json", "local-77aa00", sample, name="Anna")  # another person called Anna
+    labels = read_labels([tmp_path / "anna_1.json", tmp_path / "anna_2.json", tmp_path / "anna_b.json"])
+    assert set(labels) == {"Anna (local-3f9a2c)", "Anna (local-77aa00)"}
+    flipped = json.loads((tmp_path / "anna_2.json").read_text())["records"][0]
+    got = labels["Anna (local-3f9a2c)"][flipped["uid"]]["labels"]
+    assert [got[i] for i in flipped["span_i"]] == flipped["labels"]
+    assert set(read_labels([tmp_path / "anna_1.json", tmp_path / "anna_2.json"])) == {"Anna"}
+    # labels of another sample: refused
+    other = build_sample([run], items_per_source=4, per_item=3, min_distinct=3, seed=5)[0]
+    _export(tmp_path / "other.json", "local-3f9a2c", other)
+    with pytest.raises(ValueError, match="not in this sample"):
+        read_labels([tmp_path / "other.json"], sample=sample)
+    doc = json.loads((tmp_path / "anna_1.json").read_text())
+    doc["dataset"] = {"hash": page_hash(other)}
+    (tmp_path / "anna_1.json").write_text(json.dumps(doc))
+    with pytest.raises(ValueError, match="another sample"):
+        read_labels([tmp_path / "anna_1.json"], sample=sample)
+    doc["dataset"] = {"hash": page_hash(sample)}
+    (tmp_path / "anna_1.json").write_text(json.dumps(doc))
+    assert set(read_labels([tmp_path / "anna_1.json"], sample=sample)) == {"Anna"}
 
 
 def test_report_on_human_labels(run, tmp_path):
@@ -144,12 +184,12 @@ def test_truth_is_a_person_and_needed_fact_is_kept(run, tmp_path):
     (tmp_path / "me.json").write_text(json.dumps(doc))
     labels = read_labels([tmp_path / "me.json"])
     assert not removable(labels["me"][rec["uid"]], rec["span_i"][0])
-    text = report(tmp_path, [tmp_path / "me.json", chat])
-    assert "me" in text and "the truth below" in text and "gpt" in text and "(chat LLM)" in text
-    assert "made on another version of the sample" in text
+    with pytest.raises(SystemExit, match="another sample"):  # made on another version of the sample
+        report(tmp_path, [tmp_path / "me.json", chat])
     doc["dataset"] = {"hash": page_hash(sample)}
     (tmp_path / "me.json").write_text(json.dumps(doc))
-    assert "made on another version" not in report(tmp_path, [tmp_path / "me.json"])
+    text = report(tmp_path, [tmp_path / "me.json", chat])
+    assert "me" in text and "the truth below" in text and "gpt" in text and "(chat LLM)" in text
     assert "## Cost on these responses" in text
 
 

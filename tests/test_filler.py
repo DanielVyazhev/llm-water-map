@@ -297,3 +297,79 @@ def test_analysis_relabels_excused_misleading_spans():
     df, spans = build_tables([it], [row], [])
     assert df.loc[0, "W"] == pytest.approx(0.5) and df.loc[0, "W_misleading"] == pytest.approx(0.0)
     assert list(spans["kind"]) == ["uninformative", "kept"]
+
+
+# ---------------------------------------------------------------- v1.2
+
+def _chat_reader(**kw):
+    from drybench.backends.mock import MockBackend
+    from drybench.reader import Reader, ReaderConfig
+
+    return Reader(MockBackend(**kw), ReaderConfig(use_chat=True))
+
+
+def test_the_first_statement_of_a_fact_is_kept():
+    """Guidelines: the first full statement is needed, a later summary is filler. Without keep_first the
+    search deletes the two cheaper fact sentences and keeps the summary."""
+    it = make_item(random.Random(7), "first", k=2, d=0)
+    a1, a2 = (p.answers[0] for p in it.required_probes)
+    texts = [f"It is {a1}.", f"It is {a2}.", "I hope this helps!", f"In summary: {a1}; {a2}."]
+    reader = _chat_reader()
+    new = dry_score(reader, it, " ".join(texts), mode="loo")
+    assert [s.kept for s in new.spans] == [True, True, False, False]
+    assert {s.kind for s in new.spans if not s.kept} == {"uninformative", "duplicate"}
+    old = dry_score(reader, it, " ".join(texts), mode="loo", keep_first=False)
+    assert [s.kept for s in old.spans] == [False, False, False, True]
+
+
+def test_no_signal_is_decided_on_the_delivered_facts():
+    """A response that delivers one fact and contradicts another delivers something (v1.1: 'no_signal',
+    because the signed sum of information was below 1 nat)."""
+    from drybench.backends.mock import MockBackend
+    from drybench.reader import Reader, ReaderConfig
+
+    it = make_item(random.Random(7), "neg", k=2, d=0)
+    a1 = it.required_probes[0].answers[0]
+    forms2 = set(it.required_probes[1].answers)
+
+    class Contradicted(MockBackend):  # the reader expects fact 2 (prior 0.01) unless the message says otherwise
+        def continuation_logprobs(self, requests):
+            out = super().continuation_logprobs(requests)
+            for i, (c, k) in enumerate(requests):
+                if k.strip() in forms2:
+                    out[i] = math.log(1e-9 if "WRONG" in self._message_part(c) else 1e-2)
+            return out
+
+    res = dry_score(Reader(Contradicted(), ReaderConfig(use_chat=True)), it,
+                    f"It is {a1}. The other one is WRONG Lines.", mode="loo")
+    assert res.per_probe[0] > 5 and res.per_probe[1] < -5 and sum(res.per_probe) < 1
+    assert res.status == "ok" and res.W > 0
+    assert [s.kind for s in res.spans] == ["kept", "misleading"]
+
+
+def test_completeness_counts_each_fact_at_most_as_the_gold_does():
+    from drybench.filler import completeness
+
+    assert completeness([13.8, 13.8], [13.8, 2.0]) == pytest.approx(1.0)        # v1.1: 27.6 / 15.8 = 1.75
+    assert completeness([13.8, 0.0], [13.8, 13.8]) == pytest.approx(0.5)
+    assert completeness([13.8, -9.0], [13.8, 13.8]) == pytest.approx(0.5)       # contradicted: 0, not negative
+    assert completeness([13.8], 13.8) == pytest.approx(1.0)                     # a plain total, as up to v1.1
+    assert math.isnan(completeness([1.0], [0.0]))
+
+
+def test_a_repeat_with_a_wrong_value_is_a_wrong_statement():
+    it = make_item(random.Random(7), "sumwrong", k=2, d=0)
+    a1, a2 = (p.answers[0] for p in it.required_probes)
+    text = f"It is {a1}. It is {a2}. In summary: {a1}, and the port was WRONG Harbor."
+    res = dry_score(_chat_reader(), it, text, mode="loo")
+    assert res.spans[2].kind == "misleading" and res.spans[0].kept and res.spans[1].kept
+
+
+def test_a_span_that_also_names_the_target_is_not_about_another_shipment():
+    from drybench.filler import misleading_excuse
+
+    it = make_item(random.Random(11), "ex2", k=2, d=3)
+    t = it.meta["target"]
+    other = SHIPMENT_ID_IN(" ".join(it.meta["distractors"]))[0]
+    assert misleading_excuse(f"Shipment {other} was delayed by Brenn Lines.", it) == "other shipment"
+    assert misleading_excuse(f"Shipments {other} and {t['sid']} were both delayed by Brenn Lines.", it) is None

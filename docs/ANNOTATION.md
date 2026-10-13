@@ -27,9 +27,10 @@ flowchart TD
 ## Fragment labels
 
 1. Open the labelling page: the published page (labels are shared through it) or `RUN/annotation/labelling_page.html`
-   (a copy of `annotation/dry_span_labels_offline.html`) in a browser; labels then stay in that browser until
-   exported.
-2. Load `sample.jsonl`. Answers to the same item come one after another.
+   (a copy of `annotation/dry_span_labels_offline.html`) in your own browser; labels then stay in that browser
+   until exported (one set of labels per browser).
+2. Enter your name or initials and load `sample.jsonl`. Answers to the same item come one after another. **Load
+   another sample** switches to another file; the labels of each sample stay in the browser.
 3. Label every fragment (a sentence or a list line). The guidelines and two examples are on the page ("How to
    label").
    - **Needed**: deleting it loses something the request asks for: a requested value or answer, a step of an
@@ -38,10 +39,12 @@ flowchart TD
    - **Wrong**: a wrong answer or a claim the source contradicts. Takes priority; add "+ needed fact" if the fragment
      also gives a requested fact correctly.
    - Keys: 1 / 2 / 3, 4 = + needed fact, U = unsure, Enter = next answer.
-4. **Export labels** when done (`span_labels_DATE.json`).
+4. **Export labels** when done (`span_labels_NAME_DATE.json`). A later export of the same browser is the same
+   annotator: the report keeps the latest label of each fragment.
 
 The second annotator labels the same file independently, at least the first 60 answers. The report takes the most
-complete annotator as the truth and the other for agreement (Cohen's κ).
+complete annotator as the truth and the other for agreement (Cohen's κ). Response ids carry the sample's id, and
+the report refuses labels made on another sample.
 
 ## Abstention labels
 

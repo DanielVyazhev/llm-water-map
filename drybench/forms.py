@@ -61,6 +61,23 @@ _STOP_WORDS = {"not", "no", "nor", "or", "and", "but", "than", "rather", "instea
 _STOP_PREFIXES = ("renew", "extend", "extension")
 _OPEN_QUOTES = "\"'“‘«"
 _BARE_NUMBER = re.compile(r"[\d\s.,/%$€£¥#&+\-–—]+")
+# Before a capitalised answer, a title keeps the name ("King George VI" is "George VI"); a word of this second
+# list makes another one ("West Virginia" is not "Virginia", "New Mexico" not "Mexico").
+TITLES = {"king", "queen", "prince", "princess", "emperor", "empress", "pope", "sir", "dame", "lord",
+          "lady", "duke", "duchess", "earl", "count", "countess", "baron", "president", "vice", "senator",
+          "governor", "mayor", "chancellor", "minister", "secretary", "general", "admiral", "captain", "colonel",
+          "major", "lieutenant", "sergeant", "commander", "chief", "judge", "justice", "bishop", "archbishop",
+          "cardinal", "reverend", "rev", "father", "sister", "brother", "doctor", "dr", "professor", "prof", "mr",
+          "mrs", "ms", "miss", "sultan", "shah", "tsar", "czar", "pharaoh", "khan", "rabbi", "imam", "coach"}
+NAME_MODIFIERS = {"north", "south", "east", "west", "northern", "southern", "eastern", "western", "northeast",
+                  "northwest", "southeast", "southwest", "new", "old", "upper", "lower", "central", "greater",
+                  "little", "great", "grand", "mount", "lake", "fort", "port", "cape", "saint", "st", "san", "santa",
+                  "los", "las", "el", "la", "le"}
+_NUMBER_WORDS = {"zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven",
+                 "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen",
+                 "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety", "hundred",
+                 "thousand", "million", "billion"}
+_HYPHEN_ONLY = re.compile(rf"[{_DASH}]")
 
 
 def _norm_token(token: str) -> str:
@@ -136,7 +153,8 @@ def term_spans(message: str, value: str) -> list[tuple[int, int]]:
     target = _months(_duration_key(value))
     if target is None:
         return []
-    hyphenated = re.compile(rf"\b(?:(?:{_NUMW})|\d+)-(?:years?|months?)\b", re.I)
+    # "twenty-one-year" is 21 years: a number word joined to the one before it is not matched alone
+    hyphenated = re.compile(rf"(?<![\w-])(?:(?:{_NUMW})(?:-(?:{_NUMW}))?|\d+)-(?:years?|months?)\b", re.I)
     return [(m.start(), m.end()) for rx in (_DUR_RX, hyphenated) for m in rx.finditer(message)
             if _months(_duration_key(m.group(0))) == target]
 
@@ -145,18 +163,52 @@ def _stops_lead(word: str) -> bool:
     return word in _STOP_WORDS or word.startswith(_STOP_PREFIXES)
 
 
-def candidates(message: str, spans: Sequence[tuple[int, int]]) -> list[tuple[str, int]]:
+def _is_number(word: str) -> bool:
+    return word in _NUMBER_WORDS or word[:1].isdigit()
+
+
+def _joins_answer(message: str, word: tuple[str, int, int], s: int, keep_words: set[str],
+                  long_gold: bool = False) -> bool:
+    """Does the word right before an answer starting at `s` make one word or name with it, so that the two
+    state a different answer? "twenty-five" or "twenty five" for "five"; "West Virginia" for "Virginia";
+    "John Quincy Adams" for "Adams" when the gold also names "John Adams" (long_gold: a gold form of two or
+    more words). Not a title ("King George VI"), a word of the gold forms or the question, or a first name
+    before a gold surname ("Leonhard Euler" for "Euler")."""
+    w, _, b = word
+    gap = message[b:s]
+    if not gap or _HYPHEN_ONLY.fullmatch(gap):          # written together or hyphenated: one word
+        return True
+    if gap.strip():                                     # punctuation in between: no fusion
+        return False
+    first = message[s:s + 1]
+    raw = message[word[1]:b]
+    nxt = _TOKEN.match(message, s)
+    if _is_number(w) and (first.isdigit() or (nxt is not None and _norm_token(nxt.group(0)) in _NUMBER_WORDS)):
+        return True
+    if not (first.isupper() and raw[:1].isupper()) or w in TITLES or w in keep_words:
+        return False
+    return w in NAME_MODIFIERS or long_gold
+
+
+def candidates(message: str, spans: Sequence[tuple[int, int]], keep_words: set[str] = frozenset(),
+               exempt: Sequence[tuple[int, int]] = (), long_gold: bool = False) -> list[tuple[str, int]]:
     """(reply, place) pairs: replies that end with a stated answer — as written, with up to MAX_LEAD words of
     its phrase in front, and with the opening quote that precedes it. A place is where an answer ends in the
-    message (spans of several forms that end together are one place); the first MAX_PLACES places count."""
+    message (spans of several forms that end together are one place); the first MAX_PLACES places count.
+    An answer that is part of a longer word or name ("twenty-five", "West Virginia"; _joins_answer) gets no
+    lead: only its own wording is offered. `exempt`: spans found by value (CUAD dates and terms), offered even
+    as bare numbers."""
     words = _tokens(message)
     ends = sorted({e for _, e in spans})[:MAX_PLACES]
+    exempt = set(exempt)
     out: dict[str, int] = {}
     for s, e in spans:
         if e not in ends:
             continue
         place = ends.index(e)
         starts, k = [s], max((i for i, w in enumerate(words) if w[2] <= s), default=-1)
+        if k >= 0 and _joins_answer(message, words[k], s, keep_words, long_gold):
+            k = -1
         left = s
         while k >= 0 and len(starts) <= MAX_LEAD:
             w, a, b = words[k]
@@ -169,7 +221,8 @@ def candidates(message: str, spans: Sequence[tuple[int, int]]) -> list[tuple[str
             text = " ".join(message[a:e].split())
             variants = [text] + ([message[a - 1] + text] if a > 0 and message[a - 1] in _OPEN_QUOTES else [])
             for v in variants:
-                if len(v) > 2 and not _BARE_NUMBER.fullmatch(v) and v not in out:
+                bare_ok = (a, e) == (s, e) and (s, e) in exempt
+                if len(v) > 2 and (bare_ok or not _BARE_NUMBER.fullmatch(v)) and v not in out:
                     out[v] = place
                 if len(out) >= MAX_CANDIDATES:
                     return list(out.items())
@@ -185,16 +238,29 @@ def prefix_free(forms: Sequence[str]) -> list[str]:
     return out
 
 
-def stated_spans(message: str, probe: Probe) -> list[tuple[int, int]]:
-    """Where `message` states the answer of `probe` (text forms; CUAD dates and terms by value), in order."""
+def stated_spans(message: str, probe: Probe) -> tuple[list[tuple[int, int]], list[tuple[int, int]]]:
+    """Where `message` states the answer of `probe` (text forms; CUAD dates and terms by value), in order, and
+    which of those spans were found by value."""
     spans = answer_spans(message, list(probe.answers) + ([probe.value] if probe.value else []))
     fid = probe.fact_id or ""
     kind = fid.rsplit(":", 1)[-1] if fid.startswith("cuad:") else ""
+    by_value: list[tuple[int, int]] = []
     if probe.value and kind == "date":
-        spans += date_spans(message, probe.value)
+        by_value = date_spans(message, probe.value)
     elif probe.value and kind == "term":
-        spans += term_spans(message, probe.value)
-    return sorted(set(spans))
+        by_value = term_spans(message, probe.value)
+    return sorted(set(spans) | set(by_value)), sorted(set(by_value))
+
+
+def _keep_words(probe: Probe) -> set[str]:
+    """Words a lead may cross even when capitalised: those of the gold forms and of the question."""
+    texts = list(probe.answers) + [probe.value or "", probe.question]
+    return {w for t in texts for w, _, _ in _tokens(t)}
+
+
+def _long_gold(probe: Probe) -> bool:
+    """A gold form of two or more words that starts with a capital: the gold names a longer name."""
+    return any(len(_content(_tokens(a))) >= 2 and a[:1].isupper() for a in list(probe.answers) + [probe.value or ""])
 
 
 def own_wording_probes(reader, request: str, probes: Sequence[Probe], message: str) -> tuple[list[Probe], list[list[str]]]:
@@ -211,11 +277,13 @@ def own_wording_probes(reader, request: str, probes: Sequence[Probe], message: s
     for j, p in enumerate(probes):
         if p_gold[j] >= DELIVERED_P or is_missing(p):
             continue
-        cands = [(c, place) for c, place in candidates(message, stated_spans(message, p)) if c not in p.answers]
+        spans, by_value = stated_spans(message, p)
+        cands = [(c, place) for c, place in candidates(message, spans, _keep_words(p), by_value, _long_gold(p))
+                 if c not in p.answers]
         if not cands:
             continue
         ctx = reader.prompt(request, message, reader.question(p))
-        lps = reader.backend.continuation_logprobs([(ctx, reader.config.prefix + c) for c, _ in cands])
+        lps = reader.reply_logprobs([(ctx, reader.config.prefix + c) for c, _ in cands])
         scored = sorted(((float(pr), c, place) for pr, (c, place) in zip(np.exp(np.asarray(lps, float)), cands)),
                         key=lambda x: -x[0])
         bests, seen = [], set()

@@ -142,18 +142,31 @@ def load_squad(path: str | Path) -> list[dict]:
 
 
 def _squad_fact(qa: dict) -> dict | None:
-    """An answerable question with a short gold answer that the question does not give away."""
+    """An answerable question with a short gold answer that the question does not give away.
+
+    Accepted: the canonical answer (the span most annotators chose, then the shortest), spans that overlap
+    it in the paragraph, and spans two annotators chose; never a span the question contains. v1.2: up to v1.1
+    every annotator's span was accepted, so one annotator's slip could make a wrong answer right
+    ("Chicago Pile-1" for the Miller–Urey experiment)."""
     if qa.get("is_impossible"):
         return None
-    texts = [_norm_space(a.get("text")) for a in qa.get("answers", []) if _norm_space(a.get("text"))]
-    if not texts:
+    ans = [(_norm_space(a.get("text")), a.get("answer_start")) for a in qa.get("answers", [])]
+    ans = [(t, st) for t, st in ans if t]
+    if not ans:
         return None
-    counts = Counter(texts)  # canonical value: the span most annotators chose, then the shortest
+    counts = Counter(t for t, _ in ans)
     value = min(counts, key=lambda t: (-counts[t], len(t)))
     q = _as_question(qa["question"])
     if len(value.split()) > MAX_ANSWER_WORDS or len(q.split()) < 4 or _contains(q, value):
         return None
-    forms = text_answer_forms(texts)
+    at = [(st, st + len(t)) for t, st in ans if t == value and isinstance(st, int)]
+
+    def overlaps(t: str, st) -> bool:
+        return isinstance(st, int) and any(st < b and st + len(t) > a for a, b in at)
+
+    texts = [t for t, st in ans if t == value or counts[t] >= 2 or overlaps(t, st)]
+    texts = [t for t in dict.fromkeys(texts) if t == value or not _contains(q, t)]
+    forms = [f for f in text_answer_forms(texts) if not _contains(q, f)]
     return {"qid": qa["id"], "question": q, "value": value, "forms": forms} if forms else None
 
 
@@ -168,17 +181,30 @@ def _squad_missing(qa: dict) -> dict | None:
             "plausible": sorted(set(plausible))}
 
 
+def _overlapping_forms(a: Sequence[str], b: Sequence[str]) -> bool:
+    """One accepted form starts another (a reply could count for both questions: "organic" / "organic
+    solvents", "solvents" / "solvents")."""
+    na = [_norm(x) for x in a if _norm(x)]
+    nb = [_norm(x) for x in b if _norm(x)]
+    return any(x.startswith(y) or y.startswith(x) for x in na for y in nb)
+
+
 def _compatible(x: dict, chosen: Sequence[dict]) -> bool:
-    """Distinct questions and answers, and no answer spelled out in another question."""
+    """Distinct questions and answers: no accepted form of one question spelled out in another question or
+    starting a form of another question (v1.2: every form, not just the canonical answer); no answer of a
+    question equal to the plausible wrong answer of the unanswerable one (it was written from that question)."""
     for y in chosen:
         if _norm(x["question"]) == _norm(y["question"]):
             return False
-        if x["value"] != NOT_STATED and y["value"] != NOT_STATED and _norm(x["value"]) == _norm(y["value"]):
+        fx = [] if x["value"] == NOT_STATED else [x["value"], *x["forms"]]
+        fy = [] if y["value"] == NOT_STATED else [y["value"], *y["forms"]]
+        if fx and fy and _overlapping_forms(fx, fy):
             return False
-        if x["value"] != NOT_STATED and _contains(y["question"], x["value"]):
+        if any(_contains(y["question"], f) for f in fx) or any(_contains(x["question"], f) for f in fy):
             return False
-        if y["value"] != NOT_STATED and _contains(x["question"], y["value"]):
-            return False
+        for a, b in ((x, fy), (y, fx)):
+            if a["value"] == NOT_STATED and b and _overlapping_forms(a.get("plausible") or [], b):
+                return False
     return True
 
 
@@ -275,7 +301,7 @@ def _fill(question: str, answers: Sequence[str]) -> str | None:
     for k in sorted({int(m) for m in re.findall(r"#(\d+)", q)}, reverse=True):
         if not 1 <= k <= len(answers):
             return None
-        q = re.sub(rf"#{k}(?!\d)", answers[k - 1], q)
+        q = re.sub(rf"#{k}(?!\d)", lambda _m: answers[k - 1], q)  # the answer as is (a backslash is no escape)
     if ">>" in q:
         subj, _, rel = q.partition(">>")
         subj, rel = subj.strip(), rel.strip().rstrip("?").strip()
@@ -387,6 +413,17 @@ def source_key(item: Item) -> str:
     if src == "poddar":
         return f"poddar:{m.get('subset')}:{m.get('qid')}"
     return f"{src}:{item.item_id}"
+
+
+def source_keys(item: Item) -> set[str]:
+    """Every key of what an item is made from: source_key, and for MuSiQue also each single-hop question of the
+    composed one (its id lists them: "3hop1__699507_792411_51423"), whose paragraph and answer other composed
+    questions can reuse (v1.2: a held-out run leaves out every item that shares one)."""
+    keys = {source_key(item)}
+    mid = str(item.meta.get("musique_id") or "")
+    if (item.meta.get("source") or item.knobs.get("source")) == "musique" and "__" in mid:
+        keys |= {f"musique-step:{x}" for x in re.findall(r"\d+", mid.split("__", 1)[1])}
+    return keys
 
 
 def build_real_items(source: str, paths: str | Path | Sequence[str | Path], n_per_cell: int,

@@ -17,10 +17,14 @@ back the responses a reader's filler map has no map for because the reader reads
 from them: the method's verdict on such an answer is that it delivers nothing, so all of it is removable (the
 results tables count it as a failed answer). Responses whose gold answer the reader cannot read stay out.
 
-Response level: Spearman with the true removable share; the length-confound pair test (pairs whose true
-share differs by ≥ 0.2 where the more removable response is the SHORTER one: how often the method ranks it
-higher, ties apart); the partial Spearman correlation with the true share controlling for length.
-Fragment level: F1 and Cohen's κ of 'removable' (filler or wrong) and the AUC of the method's score.
+Response level (v1.2: the primary measures are pairwise accuracy and Spearman, both with 95% CIs, bootstrap over
+items): pairwise accuracy — over pairs whose true removable share differs by ≥ 0.2, the share the method ranks
+the response with more filler higher (ties count half), over all pairs and over pairs of responses to the same
+item; Spearman with the true share; the length-confound pair test (pairs where the more removable response is
+the SHORTER one: how often the method ranks it higher, ties apart; length gets none by construction); the
+partial Spearman correlation with the true share controlling for length.
+Fragment level: F1 and Cohen's κ of 'removable' (filler or wrong), and the AUC of the method's score (the
+filler map: minus each fragment's leave-one-out cost, when stored; up to v1.1 its yes/no decision).
 """
 
 from __future__ import annotations
@@ -38,7 +42,8 @@ from drybench.guidelines import REMOVABLE
 PLANTED_SETS = {"planted_synthetic": "filler_check", "planted_real": "filler_check_real"}
 SETS = ("planted_synthetic", "planted_real", "human_poddar", "sample")
 RESPONSE_ONLY = {"length": "length (characters)", "yap": "Yap excess (characters)", "stopwords": "stop-word share"}
-COLUMNS = ["fragments: F1", "fragments: κ", "fragments: AUC", "responses: Spearman",
+COLUMNS = ["fragments: F1", "fragments: κ", "fragments: AUC", "pairs ranked right [95% CI]",
+           "same-item pairs ranked right [95% CI]", "responses: Spearman", "Spearman [95% CI]",
            "shorter but more removable: ranked right", "… tied", "partial Spearman given length"]
 
 
@@ -137,6 +142,7 @@ def planted_cases(sub: Path, set_name: str, items: dict | None = None) -> list[d
                     "length": float(r.get("chars") or length_chars(r["text"])),
                     "yap": float(r["yap_excess"]), "stopwords": float(r["stopword_share"]),
                     "map": [not k for k in r["loo_kept"]] if r.get("loo_status") == "ok" else None,
+                    "map_cost": r.get("loo_cost") if r.get("loo_status") == "ok" else None,
                     "map_status": r.get("loo_status")})
     return out
 
@@ -164,7 +170,8 @@ def human_cases(sub: Path, documents: dict[str, str] | None = None) -> list[dict
                 "fragments": frags, "chars": [len(f) for f in frags], "has_minimal": "MINANS" in r["human"],
                 "length": float(r["resp_chars"]), "yap": float(r["yap_excess"]),
                 "stopwords": float(r["stopword_share"]),
-                "map": [not k for k in r["kept"]] if r.get("status") == "ok" else None, "map_status": r.get("status")}
+                "map": [not k for k in r["kept"]] if r.get("status") == "ok" else None,
+                "map_cost": r.get("loo_cost") if r.get("status") == "ok" else None, "map_status": r.get("status")}
         out.append(labelled_case(base, [human_truth(x) for x in r["human"]]))
     return out
 
@@ -214,9 +221,12 @@ def attach(cases: list[dict], key: str, values: dict | None, kind: str) -> None:
         v = (values or {}).get(c["id"])
         if v is None:
             continue
-        if kind == "map":
-            if len(v) == len(c["fragments"]):
-                c["methods"][key] = {"removable": [bool(x) for x in v], "score": [float(x) for x in v]}
+        if kind == "map":  # decisions, or (decisions, leave-one-out costs): the score is minus the cost
+            dec, cost = v if isinstance(v, tuple) else (v, None)
+            if len(dec) == len(c["fragments"]):
+                ok = cost is not None and len(cost) == len(dec) and all(x is not None for x in cost)
+                c["methods"][key] = {"removable": [bool(x) for x in dec],
+                                     "score": [-float(x) for x in cost] if ok else [float(x) for x in dec]}
         elif v.get("hash") and c.get("response") and v["hash"] != response_hash(c["response"]):
             continue  # made for another response with this id (a rebuilt sample): not this one's
         elif kind == "judge":
@@ -240,7 +250,8 @@ def cases_for(set_name: str, readers: Sequence[tuple[str, Path]], root: Path, it
     cases = load(readers[0][1])
     for label, sub in readers:
         got = cases if sub == readers[0][1] else load(sub)
-        attach(cases, f"map:{label}", {c["id"]: c["map"] for c in got if c["map"] is not None}, "map")
+        attach(cases, f"map:{label}", {c["id"]: (c["map"], c.get("map_cost")) for c in got if c["map"] is not None},
+               "map")
         status = {c["id"]: c.get("map_status") for c in got}
         for c in cases:
             c.setdefault("status", {})[f"map:{label}"] = status.get(c["id"])
@@ -302,6 +313,33 @@ def shorter_pairs(truth, length, value, groups=None, min_gap: float = 0.2) -> di
         return {"right": np.nan, "ties": np.nan, "pairs": 0}
     d = v[:, None] - v[None, :]
     return {"right": float((d > 0)[sel].mean()), "ties": float((d == 0)[sel].mean()), "pairs": n}
+
+
+def pair_accuracy(truth, value, min_gap: float = 0.2, groups=None) -> tuple[float, int]:
+    """Over pairs whose true shares differ by ≥ min_gap: the share where `value` is higher for the response with
+    more filler, ties counting half (50% = chance; with a two-class truth this is ROC-AUC), and the number of
+    pairs. groups: only pairs within one group (responses to the same item)."""
+    t, v = np.asarray(truth, float), np.asarray(value, float)
+    more = (t[:, None] - t[None, :]) >= min_gap - 1e-12
+    more &= np.isfinite(v)[:, None] & np.isfinite(v)[None, :]
+    if groups is not None:
+        g = np.asarray(groups, dtype=object)
+        more &= g[:, None] == g[None, :]
+    n = int(more.sum())
+    if not n:
+        return float("nan"), 0
+    d = v[:, None] - v[None, :]
+    return float(((d > 0) & more).sum() + 0.5 * ((d == 0) & more).sum()) / n, n
+
+
+def _with_ci(point: float, boots: Sequence[float], spec: str = ".2f") -> str:
+    b = np.asarray(boots, float)
+    b = b[np.isfinite(b)]
+    if point != point:
+        return "n/a"
+    if len(b) <= 10:
+        return format(point, spec)
+    return f"{format(point, spec)} [{format(np.quantile(b, 0.025), spec)}, {format(np.quantile(b, 0.975), spec)}]"
 
 
 def auc(pos, neg) -> float:
@@ -414,7 +452,19 @@ def compare(cases: list[dict], methods: Sequence[tuple[str, str]], budget_from: 
             ps = f"{part:+.2f} [{np.quantile(bs, 0.025):+.2f}, {np.quantile(bs, 0.975):+.2f}]"
         else:
             ps = f"{part:+.2f}"
-        row.update({"responses: Spearman": spearman(value, truth), "shorter but more removable: ranked right": pr["right"],
+        rho = spearman(value, truth)
+        g_all = np.array([c["group"] for c in cs], dtype=object)
+        acc, n_acc = pair_accuracy(truth, value, min_gap)
+        acc_in, n_in = pair_accuracy(truth, value, min_gap, g_all)
+        info.setdefault("pairs_all", n_acc)
+        info.setdefault("pairs_same_item", n_in)
+        b_rho = [spearman(value[b], truth[b]) for b in boots]
+        b_acc = [pair_accuracy(truth[b], value[b], min_gap)[0] for b in boots]
+        b_in = [pair_accuracy(truth[b], value[b], min_gap, g_all[b])[0] for b in boots]
+        row.update({"pairs ranked right [95% CI]": _with_ci(acc, b_acc),
+                    "same-item pairs ranked right [95% CI]": _with_ci(acc_in, b_in),
+                    "responses: Spearman": rho, "Spearman [95% CI]": _with_ci(rho, b_rho),
+                    "shorter but more removable: ranked right": pr["right"],
                     "… tied": pr["ties"], "partial Spearman given length": ps})
         rows[name] = row
     info["pairs"] = pairs

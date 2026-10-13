@@ -8,7 +8,7 @@
 # The drybench package (v__VERSION__) is embedded at the bottom of the cell; nothing to upload.
 
 # ---- settings ----
-RUN = "/content/drive/MyDrive/drybench_runs/real_t4_n15"  # the real-text run
+RUN = "/content/drive/MyDrive/drybench_runs/real_t4_n15_v12"  # the real-text run
 READERS = {"main": "Qwen/Qwen2.5-3B-Instruct",
            "phi-3.5-mini": "microsoft/Phi-3.5-mini-instruct",
            "granite-3.3-2b": "ibm-granite/granite-3.3-2b-instruct"}

@@ -126,3 +126,18 @@ def test_trace_matches_the_score(tmp_path):
     passing = [c for c in tr["joint_checks"] if c["passes"]]
     assert passing and sorted(passing[-1]["removed"]) == sorted(a["i"] for a in tr["read_alone"])
     assert tr["facts"][0]["information_full"] > 1.0 and tr["result"]["tokens_kept"] < tr["result"]["tokens"]
+
+
+def test_trace_of_a_response_without_a_filler_map(tmp_path):
+    """v1.2: a response the reader reads no requested fact from stops after the facts, with its status."""
+    items, resp = tmp_path / "items.jsonl", tmp_path / "responses.jsonl"
+    cli(["items", "--out", str(items), "--n-per-cell", "1"])
+    it = json.loads(items.read_text().splitlines()[3])
+    resp.write_text(json.dumps({"item_id": it["item_id"], "model": "m1", "variant": "default",
+                                "response": "Great question! I hope this helps!"}) + "\n")
+    out = tmp_path / "trace.json"
+    run = subprocess.run([sys.executable, ROOT / "scripts" / "trace_response.py", tmp_path, "--model", "m1", "--item",
+                          it["item_id"], "--reader-backend", "mock", "--out", out], check=True, capture_output=True,
+                         text=True)
+    tr = json.loads(out.read_text())
+    assert tr["status"] == "no_signal" and "fragments" not in tr and "no filler map (no_signal)" in run.stdout

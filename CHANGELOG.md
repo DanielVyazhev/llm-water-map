@@ -2,6 +2,64 @@
 
 A change of the scoring version makes a resumed run recompute its scores ([running](docs/running.md#rescoring)).
 
+## 1.2.0 (scoring version 10, signals version 3)
+
+Fixes after a review of 1.1.0. Every score is recomputed; the development runs are made again
+([running](docs/running.md#rescoring)).
+
+Scoring (`drybench/filler.py`, `forms.py`, `reader.py`, `segment.py`, `abstain.py`):
+- Of two statements of a fact the first full one stays and the later one goes, as the annotation guidelines say;
+  `--no-keep-first` turns this off.
+- A deleted fragment that gives a wrong answer is a wrong statement even when it also repeats a fact.
+- Completeness caps each fact at the gold's information. A response has no filler map when its positive
+  information over all facts is below 1 nat (a contradicted fact no longer hides a delivered one).
+- An answer that ends in a digit counts only if the reply does not go on with a digit ("70" is not "700").
+- Own wording: an answer that is part of a longer word or name gets no lead ("twenty-five", "West Virginia"); a
+  title keeps the name; CUAD dates and terms found by value may be bare numbers; seventy, eighty and
+  "twenty-one-year" terms parse.
+- Abbreviations and initials do not end a sentence. The gold answer is read as responses are.
+- Missing facts: the lexical rule reads clause by clause and knows more phrases.
+- "Another shipment" excuses a wrong-looking fragment only when it names another shipment and not the requested one.
+- `drybench score` defaults to `--mode loo`, as every run uses.
+
+Items and checks (`drybench/realdata.py`, `poddar.py`, `realcheck.py`):
+- SQuAD 2.0 accepts the canonical span, spans overlapping it and spans two annotators chose; no accepted form of
+  one question appears in another question of the request or starts another's form; the unanswerable question's
+  plausible answer is no other question's answer.
+- A held-out run also leaves out MuSiQue questions that share a single-hop step with a development item;
+  `filter-items --keep` no longer bypasses `--exclude-items`; the filter report keeps the counts of every top-up.
+- Poddar et al.: the closest n-gram must have every content word and the same numbers. R4 scores only responses
+  that state the reference answer (the human labels no longer enter the method). Poddar et al. is not a suite of
+  the confirmation run.
+- R3: a fact is stated by its chosen sentence and the summary only; fact sentences that state no other requested
+  answer are preferred; items without such sentences are left out; recall is also given counting the responses
+  without a filler map.
+
+Generation (`drybench/backends/hf.py`, `cli.py`): plain greedy decoding (the generation settings a model ships
+with, such as Qwen2.5's repetition penalty, are dropped); 320 new tokens by default; responses store the token
+count, whether they were cut at the limit, and how they were generated. Tables count cut responses.
+
+Comparisons and protocol (`drybench/compare.py`, `confirm.py`, `scripts/run_final.py`, `docs/PROTOCOL.md`):
+- Primary metrics: pairwise accuracy (all pairs and pairs of answers to the same item) and Spearman, with 95% CIs
+  from bootstrap resamples of items. The filler map's fragment AUC ranks fragments by leave-one-out cost.
+- `drybench confirm`: the eight confirmatory tests (H1–H3) with Holm adjustment. The protocol lists exclusions,
+  tests and the registration; `run_final.py --print-hash`; protocol changes are logged in `protocol.json`; the code
+  hash covers the package and the four run scripts; development items and data files are hashed.
+- `colab/dev_baselines_a100.ipynb`: the LLM judge and Selective Context on the development runs.
+- Reader agreement (Kendall τ) on the responses both readers scored, with a CI. β_ctrl also controls for
+  "Explain how you found it.".
+
+Runs and annotation:
+- A last JSONL line cut by an interrupted write is dropped before the next append. A resumed step with other
+  generation or scoring settings stops.
+- Response ids of the annotation samples carry the sample's id; the label report refuses labels of another sample
+  and merges re-exports of one annotator. The offline labelling page asks the annotator's name, keeps each
+  loaded sample and can load another one.
+
+Repository: MIT license; licenses of the data per source (`results/dev_v1.0/README.md`); the notebooks embed a
+byte-reproducible package; `scripts/trace_response.py` shows the status, the first-statement pass and each
+deleted fragment's own wording; outdated `scripts/run_pipeline.sh` and `colab/missing_fact_check.py` removed.
+
 ## 1.1.0 (scoring version 9)
 
 - A fact the response states in its own words is credited: the response's wording joins the fact's accepted answers

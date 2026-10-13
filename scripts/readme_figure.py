@@ -36,18 +36,10 @@ METHODS = [("map", "filler map (reader Qwen2.5-3B)", "#1f6fd1"),
 
 
 def pair_accuracy(truth, value, min_gap: float = MIN_GAP, groups=None) -> tuple[float, int]:
-    """Share of pairs (true shares differ by ≥ min_gap) where `value` is higher for the response with more filler.
-    groups: only pairs within one group (two responses to the same item)."""
-    t, v = np.asarray(truth, float), np.asarray(value, float)
-    more = (t[:, None] - t[None, :]) >= min_gap - 1e-12
-    if groups is not None:
-        g = np.asarray(groups)
-        more &= g[:, None] == g[None, :]
-    n = int(more.sum())
-    if not n:
-        return float("nan"), 0
-    d = v[:, None] - v[None, :]
-    return float(((d > 0) & more).sum() + 0.5 * ((d == 0) & more).sum()) / n, n
+    """drybench.compare.pair_accuracy (share of pairs ranked right, ties half; groups: same-item pairs only)."""
+    from drybench.compare import pair_accuracy as pa
+
+    return pa(truth, value, min_gap, groups)
 
 
 def _scored(cases: list[dict], maps: list[str]) -> list[dict]:

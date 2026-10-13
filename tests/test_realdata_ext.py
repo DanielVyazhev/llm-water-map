@@ -391,7 +391,8 @@ def test_generation_halves_a_batch_on_out_of_memory():
             return [c.upper() for c in ctxs]
 
     args = argparse.Namespace(max_new_tokens=8, temperature=0.0, seed=0)
-    assert _generate_safe(Small(), [f"c{i}" for i in range(10)], args) == [f"C{i}" for i in range(10)]
+    got = _generate_safe(Small(), [f"c{i}" for i in range(10)], args)
+    assert [g["text"] for g in got] == [f"C{i}" for i in range(10)]
 
 
 def test_colab_real_notebook_is_built():
@@ -445,12 +446,15 @@ def test_skip_ablation_deletes_what_the_prefix_leaves():
         pos += len(t) + 1
     probes = [Probe("Which star?", ["Alpha Centauri"]), Probe("Which letter?", ["Beta"])]
     reader = Reader(MockBackend(), ReaderConfig(use_chat=True))
-    base = filler_map(reader, "req", spans, probes, mode="loo", loo_skip=False)  # v0.7.1: the queue's prefix
-    skip = filler_map(reader, "req", spans, probes, mode="loo")  # default since v0.7.2
+    # the search alone (keep_first=False, as up to v1.1)
+    base = filler_map(reader, "req", spans, probes, mode="loo", loo_skip=False, keep_first=False)  # v0.7.1
+    skip = filler_map(reader, "req", spans, probes, mode="loo", keep_first=False)  # since v0.7.2
     gone = lambda r: {i for i, s in enumerate(r.spans) if not s.kept}  # noqa: E731
     assert gone(base) == {0, 1}  # the prefix stops at the second copy of fact 1 and keeps everything after it
     assert gone(skip) == {0, 1, 3} and gone(base) <= gone(skip)  # one copy of each fact stays
     assert all(s.candidate for s in base.spans) and base.spans[0].loo_cost == pytest.approx(0.0, abs=1e-9)
+    # v1.2 (default): of two statements of a fact the first one is kept
+    assert gone(filler_map(reader, "req", spans, probes, mode="loo")) == {0, 2, 4}
 
 
 def test_true_statement_excuse_counts_every_word():
@@ -480,7 +484,9 @@ def test_filter_keeps_items_in_use_and_tops_up_short_cells():
     assert st[0]["kept_before"] == 1 and st[0]["checked"] == 0 and st[1]["kept_before"] == 0 and st[1]["checked"] == 1
 
 
-def test_human_check_reads_the_responses_own_answer(poddar_file, tmp_path):
+def test_human_check_scores_only_responses_with_the_reference_answer(poddar_file, tmp_path):
+    """v1.2: a response with another answer is left out; up to v1.1 the reader read its 'own answer' from the
+    fragments people labelled minimal answer, so the labels entered the method."""
     rows = [json.loads(line) for line in Path(poddar_file).read_text().splitlines()]
     story = rows[0]["text"].split("\n")[1]
     rows.append(_poddar_row(5, "narrqa_gemma-2-2b-it_17", story, "Who saved Lothair according to Clare?",
@@ -491,11 +497,10 @@ def test_human_check_reads_the_responses_own_answer(poddar_file, tmp_path):
     cases = labelled_cases(load_poddar(path))
     reader = _chat_reader(generate_fn=lambda ctx: "Saint Anne" if "Saint Anne" in ctx else "unknown")
     s = human_label_check(reader, cases, tmp_path / "human", quiet=True)
-    assert s["answer_source"] == {"reference": 3, "own answer": 1}
-    assert s["n_scored_ok"] == 4 and s["scored_by_answer_source"]["own answer"] == 1
-    assert s["overall_reference_answer"]["n_responses"] == 3 and s["overall_prefix"]["n_responses"] == 4
-    row = [json.loads(x) for x in (tmp_path / "human" / "rows.jsonl").read_text().splitlines()][-1]
-    assert row["own_answer"] == "Saint Anne" and row["kept"] == [True, False]
+    assert s["answer_source"] == {"reference": 3} and s["n_scored_ok"] == 3
+    assert s["config"]["without_reference_answer"] == 1
+    rows = [json.loads(x) for x in (tmp_path / "human" / "rows.jsonl").read_text().splitlines()]
+    assert len(rows) == 3 and all("Saint Anne" not in " ".join(r["texts"]) for r in rows)
 
 
 def test_a_true_sentence_given_as_the_answer_is_a_wrong_answer():
@@ -568,6 +573,8 @@ def test_final_runner_both_suites_held_out_and_frozen(cuad_file, poddar_file, tm
     assert key and all(k["status_big"] is not None for k in key)  # the large reader scored the sampled answers
     assert (ann / "baselines" / "judge-j" / "sample.jsonl").exists()
     assert (tmp_path / "final.zip").exists() and (tmp_path / "final_annotation.zip").exists()
+    conf = (run / "confirmatory.md").read_text()  # v1.2: the confirmatory tests, provisional without the labels
+    assert "| H1 T1 |" in conf and "| H2 R3 |" in conf and "Provisional" in conf
     proto = json.loads((run / "protocol.json").read_text())
     import drybench
 
@@ -594,3 +601,38 @@ def test_colab_final_notebook_is_built():
     for f in ("scripts/run_final.py", "scripts/run_synthetic.py", "drybench/judge.py", "docs/PROTOCOL.md",
               "annotation/dry_span_labels_offline.html"):
         assert f in names, f
+
+
+# ---------------------------------------------------------------- v1.2: the truth of the planted check
+
+def test_a_sentence_that_only_mentions_an_answer_does_not_state_its_fact():
+    """'VerticalNet, Inc., a Pennsylvania corporation' mentions the governing law's answer but does not state
+    it: deleting the governing-law clause loses the fact (up to v1.1 the truth counted the mention)."""
+    from drybench.realcheck import document_sentences, fact_sentence
+    from drybench.simulate import evaluate_filler_map
+    from drybench.types import Item, Probe
+
+    doc = ("SUPPLY AGREEMENT\n\nThis Agreement is dated July 1, 2020 and made by VerticalNet, Inc., a Pennsylvania "
+           "corporation. The parties signed it on July 1, 2020 in Boston.\n\nThis Agreement is governed by the laws "
+           "of the Commonwealth of Pennsylvania.")
+    law = Probe("Which jurisdiction's law governs this agreement?", ["Pennsylvania"], fact_id="cuad:x:law")
+    date = Probe("What is the date of this agreement?", ["July 1, 2020"], fact_id="cuad:x:date")
+    it = Item("cu-x", doc, "Answer: date and law?", [date, law], "1. July 1, 2020.\n2. Pennsylvania.",
+              {"source": "cuad", "k": 2}, {"source": "cuad"})
+    sents = document_sentences(doc)
+    # the date sentence that does not mention the law's answer is preferred
+    assert "Pennsylvania" not in fact_sentence(it, date, sents, it.required_probes)[1]
+    sim = simulate_real(it, [], rng=random.Random(0))
+    facts = {s.text: s.fact_ids for s in sim.spans if s.label == "fact"}
+    assert all(len(f) == 1 for f in facts.values())
+    law_i = next(i for i, s in enumerate(sim.spans) if "cuad:x:law" in s.fact_ids)
+    kept = [i != law_i for i in range(len(sim.spans))]
+    assert evaluate_filler_map(sim, kept, [len(s.text) for s in sim.spans])["safety"] < 1.0
+
+
+def test_planted_recall_counts_responses_without_a_map():
+    from drybench.realcheck import _recall_with_unscored
+
+    rows = [{"labels": ["fact", "filler:hedge"], "loo_status": "ok", "loo_kept": [True, False]},
+            {"labels": ["fact", "filler:hedge", "filler:closing"], "loo_status": "no_signal"}]
+    assert _recall_with_unscored(rows) == pytest.approx(1 / 3)

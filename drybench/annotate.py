@@ -7,7 +7,8 @@ build_sample     item by item: several answers to the same item (different model
                  (the filler map's verdict on it: it delivers nothing, all of it is removable); identical answers
                  are labelled once.
                  Writes sample.jsonl (what annotators see: source text, request, response, fragments) and
-                 key.jsonl (run, item, models and prompts, the filler map of every reader per fragment).
+                 key.jsonl (run, item, models and prompts, the filler map of every reader per fragment). Response
+                 uids carry the sample's id (sample_id), so labels cannot be matched to another sample's responses.
 build_abstain    answers to items with a missing fact, for held-out labels of the lexical abstention rule
                  (drybench.abstain): abstain_sample.csv (request, the question the source does not answer,
                  answer, an empty label column) and abstain_key.jsonl.
@@ -48,6 +49,15 @@ def _design(item) -> str:
 
 def _norm(text: str) -> str:
     return " ".join(text.split())
+
+
+def sample_id(rows: Sequence[tuple[str, str, str]]) -> str:
+    """Six hex digits naming a sample by its content ((run, item id, response) in order): uids carry it, so labels of
+    one sample cannot be read as labels of another."""
+    import hashlib
+
+    h = hashlib.sha256("\n".join("\t".join(r) for r in rows).encode("utf-8"))
+    return h.hexdigest()[:6]
 
 
 def _readers(run: Path) -> list[tuple[str, Path]]:
@@ -124,11 +134,12 @@ def build_sample(runs: Sequence[str | Path], sources: Sequence[str] | None = Non
             rng.shuffle(take)
             chosen.append((run, it, take, scored))
     rng.shuffle(chosen)
+    sid = sample_id([(run.name, it.item_id, a["response"]) for run, it, take, _ in chosen for a in take])
     sample, key = [], []
     for run, it, take, scored in chosen:
         label, _ = _doc_words(it)
         for a in take:
-            uid = f"r{len(sample) + 1:03d}"
+            uid = f"s{sid}-r{len(sample) + 1:03d}"
             spans = a["scored"]["spans"]
             sample.append({"uid": uid, "source_label": label, "document": it.document, "request": it.request,
                            "response": a["response"], "spans": [{"i": k, "text": s["text"]} for k, s in enumerate(spans)]})
@@ -192,9 +203,10 @@ def build_abstain(runs: Sequence[str | Path], n: int = 150, seed: int = 0) -> tu
             m = min(models, key=lambda x: (sum(1 for p in picked if p[0] == s and p[1][2] == x), rng.random()))
             picked.append((s, by_src[s][m].pop()))
     rng.shuffle(picked)
+    sid = sample_id([(run.name, it.item_id, text) for _, (run, it, _, _, text) in picked])
     rows, key = [], []
     for k, (src, (run, it, model, variant, text)) in enumerate(picked, 1):
-        uid = f"a{k:03d}"
+        uid = f"s{sid}-a{k:03d}"
         miss = [p.question for p in it.required_probes if is_missing(p)]
         rows.append({"uid": uid, "request": it.request, "question the source does not answer": " | ".join(miss),
                      "answer": text, "label (A/B/V/O)": ""})
@@ -266,31 +278,58 @@ def abstain_check(csv_path: str | Path, key_path: str | Path) -> dict:
 
 # ---------------------------------------------------------------- labels and the report
 
-def read_labels(paths: Sequence[str | Path], with_origin: bool = False):
+def read_labels(paths: Sequence[str | Path], with_origin: bool = False, sample: Sequence[dict] | None = None):
     """annotator -> uid -> {labels, also_needed, unsure, ts}, from page exports (span-labels/1) or JSONL files
-    of chat annotators (scripts/chat_annotators.py collect). An annotator id that occurs in two files (two
-    people labelling offline are both 'local') is told apart by the file name. with_origin: also annotator ->
-    {"kind": "page" | "chat", "dataset": the page's hash of the sample it labelled}."""
+    of chat annotators (scripts/chat_annotators.py collect).
+
+    An annotator is the id its records carry: files with the same id (re-exports, or the page owner's export of
+    everyone's labels next to an annotator's own) are merged, the later label of a response winning. Exports of
+    page versions before 1.2 name every offline annotator 'local': those are told apart by the file name. An
+    annotator is shown by the name typed into the page when it has one. sample (the rows of sample.jsonl): a file
+    made on another sample (another page hash, or a uid that is not in it) is an error. with_origin: also
+    annotator -> {"kind": "page" | "chat", "dataset": the page's hash of the sample it labelled}."""
+    expected = page_hash(sample) if sample is not None else None
+    uids = {str(r["uid"]) for r in sample} if sample is not None else None
     per_file = []
     for p in map(Path, paths):
         text = p.read_text(encoding="utf-8-sig").strip()
+        names: dict[str, str] = {}
         if text.startswith("{") and '"records"' in text[:2000]:
             doc = json.loads(text)
             if doc.get("format") not in PAGE_FORMATS:
                 raise ValueError(f"{p}: not a labels export ({doc.get('format')!r})")
-            per_file.append((p, doc["records"], "page", (doc.get("dataset") or {}).get("hash")))
+            recs, kind, dataset = doc["records"], "page", (doc.get("dataset") or {}).get("hash")
+            names = {str(a.get("id")): str(a.get("name") or "").strip() for a in doc.get("annotators") or []}
         else:
-            per_file.append((p, [json.loads(line) for line in text.splitlines() if line.strip()], "chat", None))
+            recs, kind, dataset = [json.loads(line) for line in text.splitlines() if line.strip()], "chat", None
+        if expected is not None and dataset and dataset != expected:
+            raise ValueError(f"{p}: labels of another sample (the page's hash {dataset}, this sample's {expected}): "
+                             "its uids may name other responses")
+        alien = sorted({str(r["uid"]) for r in recs} - uids) if uids is not None else []
+        if alien:
+            raise ValueError(f"{p}: {len(alien)} labelled responses are not in this sample (e.g. {alien[0]}): labels "
+                             "of another sample?")
+        per_file.append((p, recs, kind, dataset, names))
     files_with = defaultdict(set)
-    for p, recs, _, _ in per_file:
+    for p, recs, *_ in per_file:
         for r in recs:
             files_with[r.get("annotator") or "local"].add(p)
-    out: dict[str, dict[str, dict]] = defaultdict(dict)
-    origin: dict[str, dict] = {}
-    for p, recs, kind, dataset in per_file:
+    shown: dict[str, str] = {}
+    for p, recs, _, _, names in per_file:
         for r in recs:
             a = r.get("annotator") or "local"
-            name = a if len(files_with[a]) == 1 else f"{a}@{p.stem}"
+            key = f"{a}@{p.stem}" if a == "local" and len(files_with[a]) > 1 else a
+            if names.get(a):
+                shown[key] = names[a]
+            shown.setdefault(key, key)
+    clash = Counter(shown.values())
+    display = {k: (v if clash[v] == 1 or v == k else f"{v} ({k})") for k, v in shown.items()}
+    out: dict[str, dict[str, dict]] = defaultdict(dict)
+    origin: dict[str, dict] = {}
+    for p, recs, kind, dataset, _ in per_file:
+        for r in recs:
+            a = r.get("annotator") or "local"
+            name = display[f"{a}@{p.stem}" if a == "local" and len(files_with[a]) > 1 else a]
             origin.setdefault(name, {"kind": kind, "dataset": dataset})
             labs = {int(i): lab for i, lab in zip(r["span_i"], r["labels"]) if lab in LABELS}
             prev = out[name].get(r["uid"])
@@ -378,17 +417,23 @@ def agreement(labels: dict[str, dict[str, dict]], uids_spans: dict[str, list[int
     return t
 
 
-def report(sample_dir: str | Path, label_files: Sequence[str | Path], primary: str | None = None) -> str:
-    """Markdown: annotators and their agreement, then every method against the primary annotator's labels
-    (all pairs, and pairs of answers to the same item), per source, the wrong-statement label, and the cost
-    per response of each method on these responses. The primary annotator is a person (a page export); chat
-    LLM annotators are compared like the other methods."""
-    from drybench.compare import attach, baseline_outputs, binary, compare, labelled_case, method_list
-    from drybench.report import md
+def labelled_cases(sample_dir: str | Path, label_files: Sequence[str | Path], primary: str | None = None) -> dict:
+    """The annotation sample against one annotator's labels (the truth): the responses that annotator labelled
+    completely, each with the filler map of every reader (an answer that delivers nothing to a reader: all of it
+    removable), the judges, Selective Context and the other annotators attached. The truth is a person (a page
+    export): by default the one with the most complete labels. Returns cases (all responses), labels, origin,
+    complete (fully labelled responses per annotator), primary, lab_cases, readers (scored every labelled
+    response), every (all readers), others (the other annotators)."""
+    from drybench.compare import attach, baseline_outputs, labelled_case
 
     d = Path(sample_dir)
     cases = sample_cases(d)
-    labels, origin = read_labels(label_files, with_origin=True)
+    with open(d / "sample.jsonl", encoding="utf-8") as f:
+        rows = [json.loads(x) for x in f if x.strip()]
+    try:
+        labels, origin = read_labels(label_files, with_origin=True, sample=rows)
+    except ValueError as e:
+        raise SystemExit(str(e)) from None
     if not labels:
         raise SystemExit("no labels in " + ", ".join(map(str, label_files)))
     spans = {c["id"]: list(range(len(c["fragments"]))) for c in cases}
@@ -402,20 +447,6 @@ def report(sample_dir: str | Path, label_files: Sequence[str | Path], primary: s
         primary = max(people, key=lambda a: complete[a])
     if primary not in labels:
         raise SystemExit(f"--primary {primary!r} is not among the annotators: {', '.join(labels)}")
-    with open(d / "sample.jsonl", encoding="utf-8") as f:
-        expected = page_hash([json.loads(x) for x in f if x.strip()])
-    doc = [f"# Human labels of the annotation sample — {d.name}", "",
-           f"{len(cases)} responses; annotators (fully labelled responses): "
-           + ", ".join(f"{a} {complete[a]}" + (" (chat LLM)" if origin[a]["kind"] == "chat" else "")
-                       + (" — the truth below" if a == primary else "") for a in labels) + "."]
-    stale = [a for a in labels if origin[a]["dataset"] and origin[a]["dataset"] != expected]
-    if stale:
-        doc += ["", "**Warning:** labels of " + ", ".join(stale) + " were made on another version of the sample "
-                "(the page's hash differs): their uids may name other responses."]
-    ag = agreement(labels, spans)
-    if not ag.empty:
-        doc += ["", "## Agreement between annotators", "",
-                "Responses both labelled completely; removable = filler, or wrong without '+ needed fact'.", "", md(ag)]
     truth = labels[primary]
     lab_cases = []
     for c in cases:
@@ -427,6 +458,7 @@ def report(sample_dir: str | Path, label_files: Sequence[str | Path], primary: s
         t_lab = ["needed" if (got["labels"][k] == "wrong" and k in got["also_needed"]) else got["labels"][k]
                  for k in range(n)]
         lab_cases.append({**labelled_case(c, t_lab), "wrong": [got["labels"][k] == "wrong" for k in range(n)]})
+
     def verdict(c: dict, r: str) -> list | None:
         """The filler map's removable fragments; an answer that delivers nothing to the reader: all of them."""
         kinds = c["kinds"].get(r)
@@ -437,23 +469,50 @@ def report(sample_dir: str | Path, label_files: Sequence[str | Path], primary: s
     every = sorted({r for c in lab_cases for r in set(c["kinds"]) | set(c.get("status", {}))
                     if verdict(c, r) is not None}, key=lambda r: (r != "main", r))
     readers = [r for r in every if all(verdict(c, r) is not None for c in lab_cases)]
-    partial = [r for r in every if r not in readers]  # scored part of the sample only: own tables below
     for r in every:
         attach(lab_cases, f"map:{r}", {c["id"]: verdict(c, r) for c in lab_cases if verdict(c, r) is not None}, "map")
-    for name, rows in baseline_outputs(d, "sample").items():
-        attach(lab_cases, name, rows, "judge" if name.startswith("judge-") else "selective")
+    for name, got in baseline_outputs(d, "sample").items():
+        attach(lab_cases, name, got, "judge" if name.startswith("judge-") else "selective")
     others = [a for a in labels if a != primary]
     for a in others:  # other annotators (people or chat LLMs) as methods
         attach(lab_cases, f"annotator-{a}",
                {c["id"]: [removable(labels[a][c["id"]], k) for k in range(len(c["fragments"]))]
                 for c in lab_cases if labels[a].get(c["id"])
                 and all(k in labels[a][c["id"]]["labels"] for k in range(len(c["fragments"])))}, "map")
+    return {"cases": cases, "spans": spans, "labels": labels, "origin": origin, "complete": complete,
+            "primary": primary, "lab_cases": lab_cases, "readers": readers, "every": every, "others": others}
+
+
+def report(sample_dir: str | Path, label_files: Sequence[str | Path], primary: str | None = None) -> str:
+    """Markdown: annotators and their agreement, then every method against the primary annotator's labels
+    (all pairs, and pairs of answers to the same item), per source, the wrong-statement label, and the cost
+    per response of each method on these responses. The primary annotator is a person (a page export); chat
+    LLM annotators are compared like the other methods."""
+    from drybench.compare import baseline_outputs, binary, compare, method_list
+    from drybench.report import md
+
+    d = Path(sample_dir)
+    got = labelled_cases(d, label_files, primary)
+    cases, labels, origin, complete = got["cases"], got["labels"], got["origin"], got["complete"]
+    primary, lab_cases, readers, every, others = (got["primary"], got["lab_cases"], got["readers"], got["every"],
+                                                  got["others"])
+    partial = [r for r in every if r not in readers]  # scored part of the sample only: own tables below
+    doc = [f"# Human labels of the annotation sample — {d.name}", "",
+           f"{len(cases)} responses; annotators (fully labelled responses): "
+           + ", ".join(f"{a} {complete[a]}" + (" (chat LLM)" if origin[a]["kind"] == "chat" else "")
+                       + (" — the truth below" if a == primary else "") for a in labels) + "."]
+    ag = agreement(labels, got["spans"])
+    if not ag.empty:
+        doc += ["", "## Agreement between annotators", "",
+                "Responses both labelled completely; removable = filler, or wrong without '+ needed fact'.", "", md(ag)]
     base = method_list(lab_cases, readers)
     budget = f"map:{readers[0]}" if readers else None
     doc += ["", f"## Methods against {primary}'s labels", "",
-            "Removable = filler, or wrong without '+ needed fact'. Response-level shares by characters; pairs: the "
-            "more removable response (by ≥ 0.2) is the shorter one; partial Spearman given length [95% CI, bootstrap over "
-            "items]; Selective Context deletes as many characters as the filler map of reader "
+            "Removable = filler, or wrong without '+ needed fact'. Response-level shares by characters. Pairs ranked "
+            "right: over pairs whose removable shares differ by ≥ 0.2, the share where the method scores the response "
+            "with more filler higher (ties half); 'shorter but more removable': such pairs where that response is the "
+            "shorter one; 95% CIs, bootstrap over items. Selective Context deletes as many characters as the filler "
+            "map of reader "
             f"{readers[0] if readers else '—'} (equal budget). Other annotators, and readers that scored part of the "
             "sample, are scored on the responses they labelled or scored, in tables of their own below."]
     for title, within in (("All pairs", False), ("Pairs of answers to the same item (Yap ranks like length)", True)):

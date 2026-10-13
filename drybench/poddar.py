@@ -73,12 +73,22 @@ def _tokens(s: str) -> list[str]:
     return [w for w in re.findall(r"\w+", s) if w not in ("a", "an", "the")]
 
 
+def _content_tokens(tokens: Sequence[str]) -> set[str]:
+    from drybench.baselines import EN_STOPWORDS
+
+    return {t for t in tokens if t not in EN_STOPWORDS and not t.isdigit()}
+
+
 def best_match(text: str, ref: str, min_f1: float = MIN_MATCH_F1) -> str | None:
     """The word n-gram of `text` closest to `ref` (token F1 after lowercasing and dropping
-    articles and apostrophes), as written in `text`; None below min_f1."""
+    articles and apostrophes), as written in `text`; None below min_f1. The n-gram must have every content
+    word and the same numbers as `ref` (v1.2: "He is" matched "he is an author", "5 to 7 days" matched
+    "3 to 5 days")."""
     rt = Counter(_tokens(ref))
     if not rt:
         return None
+    need = _content_tokens(list(rt))
+    numbers = sorted(t for t in _tokens(ref) if t.isdigit())
     words = list(re.finditer(r"\S+", text))
     n_max = len(ref.split()) + 2
     best_f, best = 0.0, None
@@ -89,7 +99,7 @@ def best_match(text: str, ref: str, min_f1: float = MIN_MATCH_F1) -> str | None:
             span = text[words[i].start(): words[i + n - 1].end()].strip(_EDGE_PUNCT)
             st = Counter(_tokens(span))
             common = sum((st & rt).values())
-            if not common:
+            if not common or not need <= set(st) or sorted(t for t in _tokens(span) if t.isdigit()) != numbers:
                 continue
             p, r = common / sum(st.values()), common / sum(rt.values())
             f = 2 * p * r / (p + r)

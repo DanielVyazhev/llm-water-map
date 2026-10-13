@@ -148,10 +148,13 @@ def _results(it: pd.DataFrame) -> pd.DataFrame:
     g["removable"] = ok.groupby("group")["W_removable"].mean()
     g["complete"] = g["complete_share"]  # over ok and no-signal responses: a failed answer is incomplete
     g["removable_complete"] = ok[ok["facts"] >= 1.0 - 1e-9].groupby("group")["W_removable"].mean()
+    if "truncated" in it and it["truncated"].notna().any():  # v1.2: responses cut at the token limit
+        g["cut"] = it.assign(cut=it["truncated"].astype(float)).groupby("group")["cut"].mean()
     cols = {"n": "n", "tokens_mean": "tokens", "removable": "removable", "W_mean": "filler",
             "W_misleading_mean": "wrong", "facts_mean": "facts", "complete": "complete answers",
             "removable_complete": "removable, complete answers", "kappa_mean": "κ",
-            "overhead_gmean": "overhead", "removable_gmean": "×removable", "wordiness_gmean": "×wordiness"}
+            "overhead_gmean": "overhead", "removable_gmean": "×removable", "wordiness_gmean": "×wordiness",
+            "cut": "cut at the token limit"}
     t = g[[c for c in cols if c in g]].rename(columns=cols)
     t.index.name = "model | prompt"
     return t
@@ -169,7 +172,9 @@ def _concise(it: pd.DataFrame) -> pd.DataFrame | None:
         with np.errstate(divide="ignore", invalid="ignore"):
             lr = np.log(g[("overhead", "concise")].to_numpy(float) / g[("overhead", "default")].to_numpy(float))
         rows[m] = {"Δtokens": ci(d("tokens")), "Δremovable": ci(d("W_removable")), "Δfiller": ci(d("W")),
-                   "Δwrong": ci(d("W_misleading")), "Δfacts": ci(d("facts")), "overhead": ci(lr, ratio=True)}
+                   "Δwrong": ci(d("W_misleading")), "Δfacts": ci(d("facts")), "overhead": ci(lr, ratio=True),
+                   # removable shares and overhead need a filler map under both prompts (v1.2: shown)
+                   "pairs with both maps": f"{int(np.isfinite(d('W_removable')).sum())} of {len(g)}"}
     if not rows:
         return None
     t = pd.DataFrame(rows).T
@@ -243,6 +248,8 @@ def _entropy(sp: pd.DataFrame, docs: dict | None = None) -> pd.DataFrame:
     the spans copied from the document and within those in the model's own words."""
     rows = {}
     sp = sp[sp["kind"] != "misleading"]
+    if "status" in sp:  # a response without a filler map has no filler: its spans are not 'kept' (v1.2)
+        sp = sp[sp["status"] == "ok"]
     if docs is not None and not sp.empty:
         sp = sp.assign(origin=[span_origin(t, docs.get(i, "")) for t, i in zip(sp["text"], sp["item_id"])])
     for g, d in sp.groupby("group"):
@@ -280,14 +287,34 @@ def _agreement(a: dict, b: dict, suite: str) -> list[str]:
                            for _, d in both.groupby(["model", "variant"])], float)
         rows[lab] = {"Spearman, pooled": both[f"{c}_1"].corr(both[f"{c}_2"], method="spearman"),
                      "Spearman, within model × prompt": np.nanmean(within) if np.isfinite(within).any() else np.nan}
-    ga, gb = _results(ia), _results(ib)
-    for c, lab in (("removable", "removable"), ("filler", "filler"), ("overhead", "overhead"), ("facts", "facts")):
-        if c in ga and c in gb:
-            rows[lab]["Kendall τ, group ranking"] = ga[c].corr(gb[c], method="kendall")
+    # group rankings on the responses both readers scored (v1.2; before, each reader's own scored responses)
+    keys = both[["model", "variant", "item_id"]]
+    ca, cb = ia.merge(keys, on=["model", "variant", "item_id"]), ib.merge(keys, on=["model", "variant", "item_id"])
+    ga, gb = _results(ca), _results(cb)
+    ids = sorted(set(keys["item_id"]))
+    rng = np.random.default_rng(0)
+    metrics = [(c, lab) for c, lab in (("removable", "removable"), ("filler", "filler"), ("overhead", "overhead"),
+                                       ("facts", "facts")) if c in ga and c in gb]
+    draws: dict[str, list[float]] = {c: [] for c, _ in metrics}
+    for _ in range(200):  # bootstrap over items (each drawn item with all its responses)
+        pick = pd.DataFrame({"item_id": rng.choice(ids, len(ids))})
+        xa, xb = _results(ca.merge(pick, on="item_id")), _results(cb.merge(pick, on="item_id"))
+        for c, _ in metrics:
+            if c in xa and c in xb:
+                draws[c].append(xa[c].corr(xb[c], method="kendall"))
+    for c, lab in metrics:
+        tau = ga[c].corr(gb[c], method="kendall")
+        bs = np.asarray(draws[c], float)
+        bs = bs[np.isfinite(bs)]
+        rows[lab]["Kendall τ, group ranking [95% CI]"] = (
+            f"{tau:+.2f} [{np.quantile(bs, 0.025):+.2f}, {np.quantile(bs, 0.975):+.2f}]"
+            if tau == tau and len(bs) > 10 else (f"{tau:+.2f}" if tau == tau else "n/a"))
     t = pd.DataFrame(rows).T
     t.index.name = f"{a['label']} vs {b['label']}"
     sa, sb = a["spans"][a["spans"]["source"] == suite], b["spans"][b["spans"]["source"] == suite]
     s = sa.merge(sb, on=["model", "variant", "item_id", "span_idx"], suffixes=("_1", "_2"))
+    if "status_1" in s:  # spans of responses both readers mapped (v1.2: failed ones were counted as 'kept')
+        s = s[(s["status_1"] == "ok") & (s["status_2"] == "ok")]
     po_r, k_r = cohen(s["kind_1"] != "kept", s["kind_2"] != "kept")
     po_w, k_w = cohen(s["kind_1"].isin(FILLER), s["kind_2"].isin(FILLER))
     po_m, k_m = cohen(s["kind_1"] == "misleading", s["kind_2"] == "misleading")
@@ -299,8 +326,8 @@ def _agreement(a: dict, b: dict, suite: str) -> list[str]:
 
 def _kept_note(label: str, n: int, not_candidate: float) -> str:
     return (f"- {label}: of {n} planted filler fragments left in, {100 * not_candidate:.0f}% cost more than the "
-            f"tolerance to delete even alone (the reader uses them); {100 * (1 - not_candidate):.0f}% could go alone "
-            "but not together with the fragments deleted before them.")
+            f"tolerance to delete even alone (without them the reader's answer probabilities move by more than τ); "
+            f"{100 * (1 - not_candidate):.0f}% could go alone but not together with the fragments deleted before them.")
 
 
 def _filler_check_section(subs: list[tuple[str, Path]],
@@ -383,17 +410,21 @@ def _planted_section(subs: list[tuple[str, Path]], missing: set = frozenset()) -
         ws = _planted(sub, missing)
         if not ws or "overall" not in ws:
             continue
-        parts = [("all suites", ws["overall"], ws["wrong"])] + [
-            (SUITES.get(src, src), v, v["wrong"]) for src, v in ws["by_source"].items()]
+        parts = [("all suites", ws["overall"], ws["wrong"], ws.get("n_responses"), ws.get("recall_with_unscored"))] + [
+            (SUITES.get(src, src), v, v["wrong"], v.get("n_built"), v.get("recall_with_unscored"))
+            for src, v in ws["by_source"].items()]
         pf = ws.get("overall_prefix") or {}
         if pf.get("n_responses"):
-            parts.append((f"all suites, {PREFIX}", pf, {"deleted": float("nan"), "labelled_wrong": float("nan")}))
-        for name, v, wr in parts:
+            parts.append((f"all suites, {PREFIX}", pf, {"deleted": float("nan"), "labelled_wrong": float("nan")},
+                          None, None))
+        for name, v, wr, built, rec_all in parts:
             lo, hi = v["recall_pooled_ci"]
             rows[f"{label} — {name}"] = {
-                "responses (with filler)": f"{v['n_responses']} ({v['n_with_filler']})",
+                "responses scored (with filler)": f"{v['n_responses']} ({v['n_with_filler']})"
+                + (f" of {built}" if built else ""),
                 "no fact lost": v["no_fact_lost"], "precision": v["precision_pooled"],
                 "recall, planted filler [95% CI]": f"{_f(v['recall_pooled'])} [{_f(lo)}, {_f(hi)}]",
+                "… counting unscored responses": rec_all if rec_all is not None else float("nan"),
                 "repeats resolved": v["repeats_resolved"],
                 "wrong statements deleted": wr["deleted"], "… and labelled wrong": wr["labelled_wrong"],
                 "MAE of removable share": v["W_mae"]}
@@ -425,8 +456,11 @@ def _planted_section(subs: list[tuple[str, Path]], missing: set = frozenset()) -
             "sentences that answer nothing asked (elaboration: same paragraph as a fact; unrequested: another "
             "paragraph) or a summary repeating the facts. Conditions: none / 2 / 5 filler fragments, 2 with one "
             "fact left out, and 1 filler fragment + 1 wrong statement (another item's answer given as the answer). "
-            "Truth is known per fragment; recall counts planted filler fragments (95% CI, bootstrap over items). "
-            "Items with a missing fact are left out. "
+            "Truth is known per fragment: a fact is stated by the sentence chosen for it and by the summary, not by "
+            "a sentence that only mentions its answer (v1.2). Recall counts planted filler fragments (95% CI, "
+            "bootstrap over items); '… counting unscored responses' also counts the planted filler of the responses "
+            "from which the reader reads no fact (no filler map) as not deleted. Items with a missing fact, and "
+            "items whose facts the document does not state in a sentence, are left out. "
             f"'{PREFIX}' = the deletion search stops at the first fragment that cannot go together with the ones "
             "before it (the default skips that fragment and continues).",
             "", md(t), "", "Deleted / planted by type (τ = 0.5 nats): " + "; ".join(types) + ".", ""] + notes
@@ -439,8 +473,11 @@ def _human_section(subs: list[tuple[str, Path]]) -> list[str]:
         hs = _summary(sub, "human_check")
         if not hs or "fragments" not in (hs.get("overall") or {}):
             continue  # nothing scored, or no fragment carries a human label
-        variants = [("", hs["overall"]), (", reference answer only", hs.get("overall_reference_answer") or {}),
-                    (f", {PREFIX}", hs.get("overall_prefix") or {})]
+        src = hs.get("scored_by_answer_source") or {}
+        own = any(k != "reference" for k in src)  # rows of v1.1 and before: some facts read from MINANS
+        variants = [("", hs["overall"])] + (
+            [(", reference answer only", hs.get("overall_reference_answer") or {})] if own else []) + [
+            (f", {PREFIX}", hs.get("overall_prefix") or {})]
         for suffix, o in variants:
             if "fragments" not in o:
                 continue
@@ -452,10 +489,13 @@ def _human_section(subs: list[tuple[str, Path]]) -> list[str]:
                                     "Spearman, share per response": o["share_vs_human"]["spearman"],
                                     "deleted share (mean)": o["deleted_share_mean"],
                                     "human share (mean)": o["human_share_mean"]}
-        src = hs.get("scored_by_answer_source") or {}
-        if src:
+        left = (hs.get("config") or {}).get("without_reference_answer")
+        if own:
             sources.append(f"{label}: {hs['n_scored_ok']} of {hs['n_responses']} labelled responses scored ("
                            + ", ".join(f"{v} by the {k}" for k, v in src.items()) + ")")
+        else:
+            sources.append(f"{label}: {hs['n_scored_ok']} of the {hs['n_responses']} responses that state the reference "
+                           f"answer scored" + (f"; {left} labelled responses without it are left out" if left else ""))
         kn = hs.get("kept_not_minimal")
         if kn:
             sources.append(f"{label}: of {kn['fragments']} kept fragments the annotators marked as not minimal, "
@@ -482,10 +522,11 @@ def _human_section(subs: list[tuple[str, Path]]) -> list[str]:
            "Poddar et al.'s data (NarrativeQA, TweetQA, MS MARCO; reference answer of at most 6 words), with "
            "human span labels. A fragment is 'not minimal' when most of its characters carry a label other than "
            "MINANS; precision and recall of deletion are measured against that (unlabelled fragments left out). "
-           "The fact is the response's own answer: the reference answer, or what the reader reads from the "
-           "fragments marked MINANS (annotators label minimal vs extra text whether or not the answer is right); "
-           "responses with neither are not scored. 'reference answer only' = responses that state the reference "
-           f"answer; '{PREFIX}' = the deletion search stops at the first fragment that cannot go together with "
+           "The fact is the reference answer; only responses that state it are scored (annotators label minimal vs "
+           "extra text whether or not the answer is right, so for another answer the labels and the filler map "
+           "measure different things; up to v1.1 the reader was given the fragments marked MINANS to find such a "
+           "response's own answer, so the labels entered the method). "
+           f"'{PREFIX}' = the deletion search stops at the first fragment that cannot go together with "
            "the ones before it.", "", md(t), ""] + \
         ([f"- {x}." for x in sources] + [""] if sources else []) + [md(tl), "", md(ts)]
     if taus:
@@ -497,11 +538,14 @@ def _human_section(subs: list[tuple[str, Path]]) -> list[str]:
 BASELINES_NOTE = (
     "Every method on the same responses: the filler map of each reader, the LLM judge and Selective Context when "
     "they were run (drybench baselines), and three cheap metrics. Fragment level, removable (filler or wrong "
-    "statement) vs needed: F1, Cohen's κ, and the AUC of the method's score (the judge's p(filler) + p(wrong); "
-    "Selective Context: lower self-information = more removable). Response level, removable share by "
-    "characters: Spearman with the true share; 'shorter but more removable' = pairs whose true share differs by ≥ 0.2 "
-    "where the more removable response is the shorter one, share the method ranks higher (ties apart); partial "
-    "Spearman with the true share given length [95% CI, bootstrap over items]. Selective Context deletes, least "
+    "statement) vs needed: F1, Cohen's κ, and the AUC of the method's score (the filler map: minus the fragment's "
+    "leave-one-out cost, or its yes/no decision where no cost is stored; the judge's p(filler) + p(wrong); "
+    "Selective Context: lower self-information = more removable). Response level, removable share by characters "
+    "(95% CIs: bootstrap over items): pairs ranked right = over pairs whose true share differs by ≥ 0.2, the share "
+    "where the method scores the response with more filler higher (ties count half; 0.5 = chance), over all pairs "
+    "and over pairs of responses to the same item; Spearman with the true share; 'shorter but more removable' = "
+    "such pairs where the more removable response is the shorter one, share the method ranks higher (ties apart; "
+    "length: 0 by construction); partial Spearman with the true share given length. Selective Context deletes, least "
     "informative fragment first, as many characters as the first reader's filler map (equal budget); the judge's "
     "share is its expected removable share. Planted responses: the true share is the planted filler and wrong "
     "statements (a summary that repeats the facts is planted filler); a fact stated twice may go either way, so "
@@ -514,7 +558,8 @@ BASELINES_NOTE = (
 def comparison(set_name: str, subs: list[tuple[str, Path]], root: Path, items: dict | None = None,
                missing: set = frozenset(), subset=None, fill: bool = False) -> tuple[pd.DataFrame, dict]:
     """drybench.compare on one truth set: the filler map of every reader, the baselines in root/baselines;
-    fill: a filler map that did not score a response deletes nothing from it."""
+    fill: a response from which a reader reads none of the requested facts counts as all removable for that
+    reader's filler map (compare.fill_unscored); a response whose gold it cannot read stays out."""
     from drybench.compare import cases_for, compare, fill_unscored, method_list
 
     cases = cases_for(set_name, subs, root, items)
@@ -785,17 +830,23 @@ def real_tables(run: str | Path) -> str:
     fr = run / "filter_report.json"
     if fr.exists():
         rep = json.loads(fr.read_text())
-        t0 = pd.DataFrame({cell_design(k): {"pool": v["pool"], "checked": v["checked"],
-                                            "reader knew a fact": v["known"], "gold unreadable": v["unreadable"],
-                                            "kept": v["kept"], "kept from before": v.get("kept_before", 0)}
+        runs = (rep.get("earlier") or []) + [rep]  # the first filter and its top-ups (v1.2 keeps them all)
+
+        def total(k: str, field: str) -> int:
+            return int(sum(r.get("cells", {}).get(k, {}).get(field, 0) for r in runs))
+
+        t0 = pd.DataFrame({cell_design(k): {"pool": max(r.get("cells", {}).get(k, {}).get("pool", 0) for r in runs),
+                                            "checked": total(k, "checked"), "reader knew a fact": total(k, "known"),
+                                            "gold unreadable": total(k, "unreadable"), "kept": v["kept"]}
                            for k, v in rep["cells"].items()}).T
-        if not t0["kept from before"].astype(float).any():
-            t0 = t0.drop(columns="kept from before")
         t0.index.name = "cell"
+        lost = (not rep.get("earlier") and any(v.get("kept_before") for v in rep["cells"].values()))
         doc += ["", "## R0. Items after the leakage filter", "",
                 f"An item is dropped when the reader answers one of its facts from an empty message with "
                 f"p ≥ {rep['max_prior']} (it knows the fact), or reads a fact from the gold answer with "
-                f"p < {rep['min_gold_p']}.", "", md(t0)]
+                f"p < {rep['min_gold_p']}. Counts over the first filter and its top-ups."
+                + (" This run's first counts were overwritten by a top-up (before v1.2): cells it did not top up "
+                   "show 0 checked." if lost else ""), "", md(t0)]
 
     checks = {r["label"]: r["reader_check"] for r in R if r["reader_check"]}
     if checks:

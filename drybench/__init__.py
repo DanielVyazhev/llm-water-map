@@ -8,10 +8,10 @@ compensation for uncertainty).
 
 from drybench.types import Item, Probe, Span
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 # Bump when scoring (or item answer forms) changes: stored scores are recomputed (all of them, or
 # only those drybench.rescore.PARTIAL names for that version).
-SCORING_VERSION = "9"
+SCORING_VERSION = "10"
 # Bump when segmentation or the entropy signals change: stored signals are recomputed.
-SIGNALS_VERSION = "2"
+SIGNALS_VERSION = "3"
 __all__ = ["Item", "Probe", "Span", "SCORING_VERSION", "SIGNALS_VERSION", "__version__"]

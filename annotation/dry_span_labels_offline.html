@@ -48,7 +48,7 @@ kbd{font:500 11px/1 var(--mono);padding:2px 5px;border:1px solid var(--line-stro
 .meter i{display:block;height:100%;width:0;background:var(--accent);transition:width .25s}
 .peers{display:flex;flex-wrap:wrap;gap:4px 14px}
 .peer b{color:var(--ink);font-weight:600}
-.acts{display:flex;align-items:center;gap:6px;margin-left:auto}
+.acts{display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:6px;margin-left:auto;min-width:0}
 .save{font-size:12px;color:var(--muted);padding:3px 9px;border-radius:999px;border:1px solid var(--line);white-space:nowrap}
 .save[data-s="retry"],.save[data-s="local"]{color:var(--warn);background:var(--warn-bg);border-color:transparent}
 .btn{border:1px solid var(--line-strong);background:var(--surface);border-radius:6px;padding:6px 12px;font-size:14px;line-height:1.25}
@@ -102,6 +102,10 @@ kbd{font:500 11px/1 var(--mono);padding:2px 5px;border:1px solid var(--line-stro
 .small{font-size:13px}
 .err{color:var(--wrong);font-weight:500}
 .parsed{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px}
+.field{display:grid;gap:4px;max-width:420px}
+.field label{font-weight:500}
+.field input,.sheet input{padding:7px 10px;border:1px solid var(--line-strong);border-radius:6px;background:var(--surface)}
+.field input[aria-invalid="true"]{border-color:var(--wrong)}
 .meter.big{height:8px;max-width:420px}
 
 /* item */
@@ -153,7 +157,8 @@ kbd{font:500 11px/1 var(--mono);padding:2px 5px;border:1px solid var(--line-stro
 #next-btn.ready{box-shadow:0 0 0 3px var(--needed-bg);border-color:var(--needed);background:var(--needed);color:var(--on-label)}
 @media (min-width:901px){.report{position:sticky;top:calc(var(--bar-h) + 12px);max-height:calc(100vh - var(--bar-h) - 24px);overflow:auto}}
 @media (max-width:900px){.grid,.ex{grid-template-columns:minmax(0,1fr)}.defs{grid-template-columns:minmax(0,1fr)}}
-@media (max-width:620px){.span{grid-template-columns:minmax(0,1fr)}.btns{justify-content:flex-start}.request{font-size:16px}}
+@media (max-width:620px){.span,.ex-row{grid-template-columns:minmax(0,1fr)}.btns{justify-content:flex-start}.request{font-size:16px}
+  .ex-row .tag{align-items:flex-start}.ex-row .why{text-align:left}}
 
 /* toast, dialog */
 .toast{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:6px;font-size:14px;z-index:50;max-width:calc(100% - 32px)}
@@ -176,6 +181,7 @@ kbd{font:500 11px/1 var(--mono);padding:2px 5px;border:1px solid var(--line-stro
     <h2 id="modal-title"></h2>
     <p id="modal-text" class="small"></p>
     <textarea id="modal-json" rows="10" readonly></textarea>
+    <input id="modal-name" type="text" maxlength="40" autocomplete="name" aria-labelledby="modal-title" hidden>
     <div class="row"><button type="button" class="btn primary" data-act="copy" id="modal-copy"></button><button type="button" class="btn" data-act="close" id="modal-close"></button></div>
   </div>
 </div>
@@ -194,7 +200,12 @@ const STOPWORDS = new Set(("a an the of was were is are be been by on in at to f
 const LS = {
   get(k) { try { return window.localStorage.getItem(k); } catch (e) { return null; } },
   set(k, v) { try { window.localStorage.setItem(k, v); return true; } catch (e) { return false; } },
+  del(k) { try { window.localStorage.removeItem(k); } catch (e) { /* nothing kept */ } },
+  keys() { try { return Object.keys(window.localStorage); } catch (e) { return []; } },
 };
+// samples labelled in this browser: each under its hash; DS_CUR names the one in use
+const DS_CUR = "dry:dataset:v2:current";
+const dsKey = (h) => "dry:dataset:v2:" + h;
 
 const T = {
   brand: "Span labels",
@@ -205,7 +216,7 @@ const T = {
   connecting: "Connecting to the page's storage…",
   uploadTitle: "Load the sample",
   uploadOwner: "Choose sample.jsonl from the run's annotation folder. The page stores it once; after that, anyone you share the page with labels the same responses without the file.",
-  uploadLocal: "Choose annotation/sample.jsonl. The responses and your labels stay in this browser; press Export labels when you finish.",
+  uploadLocal: "Choose annotation/sample.jsonl. The responses and your labels stay in this browser; press Export labels when you finish. Label in your own browser: the page keeps one set of labels per browser.",
   waiting: "The page owner has not loaded the sample yet. You can wait, or label your own copy of annotation/sample.jsonl here: labels then stay in this browser until you export them.",
   keyWarn: "Load sample.jsonl only. key.jsonl holds the benchmark's own labels; keep it closed until labelling is done.",
   drop: "Choose sample.jsonl or drop it here",
@@ -239,6 +250,12 @@ const T = {
   modalText: "Saving files is not available here. Copy this text into a file named span_labels.json and send it to the page owner.",
   copy: "Copy", copied: "Copied", close: "Close",
   noSpans: "This response has no fragments to label.",
+  another: "Load another sample", backToSample: "Back to the current sample",
+  nameLabel: "Your name or initials", nameTitle: "Your name",
+  nameHint: "It goes into the exported file, so that the report tells annotators apart.",
+  errName: "Enter your name or initials first.", saveExport: "Save and export",
+  notKept: "This browser does not keep the labels (its storage is full or blocked). Export them before you close the page.",
+  sampleNotKept: "This browser could not keep the sample. Your labels are kept: next time, load the same file again.",
 };
 
 // GUIDE:START — generated from drybench/guidelines.py by scripts/build_annotation_page.py; edit it there
@@ -360,6 +377,7 @@ const S = {
   pending: new Set(), writing: false, flushTimer: 0, saveState: "idle", failures: 0,
   parsed: null, parseError: "", seedDone: 0, interrupted: false,
   notices: [], watching: false,
+  name: "", tag: "", nameError: false, modal: "export",
 };
 
 const $ = (id) => document.getElementById(id);
@@ -428,11 +446,33 @@ function parseSample(text) {
 }
 
 function readLocalDataset() {
-  try {
-    const arr = JSON.parse(LS.get("dry:dataset:v1") || "null");
-    if (Array.isArray(arr) && arr.length && arr.every((o) => o && typeof o.uid === "string" && Array.isArray(o.spans))) return arr;
-  } catch (e) { /* no saved copy */ }
+  const cur = LS.get(DS_CUR);
+  // dry:dataset:v1: the one sample an earlier version of the page kept
+  for (const key of [cur ? dsKey(cur) : "", "dry:dataset:v1"]) {
+    if (!key) continue;
+    try {
+      const arr = JSON.parse(LS.get(key) || "null");
+      if (Array.isArray(arr) && arr.length && arr.every((o) => o && typeof o.uid === "string" && Array.isArray(o.spans))) return arr;
+    } catch (e) { /* not kept */ }
+  }
   return null;
+}
+
+function keepLocalDataset(list) { // after setDataset(list)
+  if (LS.get(DS_CUR) === S.hash) return;
+  const text = JSON.stringify(list);
+  let ok = LS.set(dsKey(S.hash), text);
+  if (!ok) { // storage full: drop the other samples (their labels stay; loading a file again restores it)
+    for (const k of LS.keys()) if (k.startsWith("dry:dataset:") && k !== DS_CUR) LS.del(k);
+    ok = LS.set(dsKey(S.hash), text);
+  }
+  if (ok) { LS.set(DS_CUR, S.hash); LS.del("dry:dataset:v1"); } else note("sampleNotKept");
+}
+
+function note(key) {
+  if (S.notices.includes(key)) return;
+  S.notices.push(key);
+  renderNotice();
 }
 
 /* ---------- labels ---------- */
@@ -470,9 +510,23 @@ function nLabeled(it, r) {
 const isDone = (it, r) => nLabeled(it, r) === it.spans.length;
 function doneCount(map) { let n = 0; for (const it of S.items) if (isDone(it, map[it.uid])) n++; return n; }
 
-const who = () => S.myId || "local";
+const who = () => S.myId || "local"; // storage keys
 const backupKey = () => `dry:labels:v1:${S.hash}:${who()}`;
-function saveBackup() { LS.set(backupKey(), JSON.stringify(S.mine)); }
+function saveBackup() { if (!LS.set(backupKey(), JSON.stringify(S.mine)) && S.store === "local") note("notKept"); }
+
+function browserTag() { // offline annotator id in exports: tells annotators apart, keeps one annotator's re-exports together
+  if (!/^[0-9a-f]{6}$/.test(S.tag)) S.tag = LS.get("dry:browser:v1") || "";
+  if (!/^[0-9a-f]{6}$/.test(S.tag)) {
+    const b = new Uint8Array(3);
+    if (window.crypto && window.crypto.getRandomValues) window.crypto.getRandomValues(b);
+    else b.forEach((_, i) => { b[i] = Math.floor(Math.random() * 256); });
+    S.tag = Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+    LS.set("dry:browser:v1", S.tag);
+  }
+  return S.tag;
+}
+const exportId = () => S.myId || "local-" + browserTag();
+function setName(v) { S.name = String(v || "").trim().slice(0, 40); LS.set("dry:name:v1", S.name); }
 function readBackup() {
   try {
     const o = JSON.parse(LS.get(backupKey()) || "{}");
@@ -671,10 +725,11 @@ function renderBar() {
   const peers = others.map((o, k) => `<span class="peer">${esc(S.names[o.id] || t("annotatorN", k + 2))} <b class="num">${doneCount(o.items)}</b><span class="num">/${n}</span></span>`).join("");
   $("bar-inner").innerHTML = `
     <div class="brand"><span class="mark" aria-hidden="true"><i></i><i></i><i></i></span><span>${esc(t("brand"))}</span>${ready ? `<small>${esc(t("datasetInfo", n, S.nSpans))}</small>` : ""}</div>
-    <div class="prog">${ready ? `<div class="me"><span>${esc(t("you"))}</span><div class="meter" role="progressbar" aria-valuemin="0" aria-valuemax="${n}" aria-valuenow="${done}"><i id="my-meter"></i></div><span class="num">${done}/${n}</span></div>${peers ? `<div class="peers">${peers}</div>` : ""}` : ""}</div>
+    <div class="prog">${ready ? `<div class="me"><span>${esc(S.store === "local" && S.name ? S.name : t("you"))}</span><div class="meter" role="progressbar" aria-valuemin="0" aria-valuemax="${n}" aria-valuenow="${done}"><i id="my-meter"></i></div><span class="num">${done}/${n}</span></div>${peers ? `<div class="peers">${peers}</div>` : ""}` : ""}</div>
     <div class="acts">
       ${ready ? `<span class="save" data-s="${saveKey()}">${esc(t(saveKey()))}</span>` : ""}
       <button type="button" class="btn ghost" data-act="guide" aria-controls="guide">${esc(t("guide"))}</button>
+      ${ready && S.store === "local" ? `<button type="button" class="btn ghost" data-act="another">${esc(t("another"))}</button>` : ""}
       ${ready ? `<button type="button" class="btn" data-act="export">${esc(t("export"))}</button>` : ""}
     </div>`;
   const meter = $("my-meter");
@@ -738,14 +793,20 @@ function uploadHTML() {
   const intro = S.phase === "waiting" ? t("waiting") : seed ? t("uploadOwner") : t("uploadLocal");
   const p = S.parsed;
   const nSp = p ? p.reduce((a, x) => a + x.spans.length, 0) : 0;
+  const name = seed ? "" : `<div class="field"><label for="who-name">${esc(t("nameLabel"))}</label>
+      <input id="who-name" type="text" maxlength="40" autocomplete="name" value="${esc(S.name)}"${S.nameError ? ' aria-invalid="true" aria-describedby="name-err"' : ""}>
+      <p class="small muted">${esc(t("nameHint"))}</p>
+      ${S.nameError ? `<p class="err" id="name-err" role="alert">${esc(t("errName"))}</p>` : ""}</div>`;
   return `<section class="card empty">
     <h2>${esc(t("uploadTitle"))}</h2>
     ${S.interrupted && seed ? `<p class="banner">${esc(t("interrupted"))}</p>` : ""}
     <p>${esc(intro)}</p>
     <p class="small muted">${esc(t("keyWarn"))}</p>
+    ${name}
     <label class="drop" id="drop"><input type="file" id="file" accept=".jsonl,.json,.txt"><span>${esc(t("drop"))}</span></label>
     ${S.parseError ? `<p class="err" role="alert">${esc(S.parseError)}</p>` : ""}
     ${p ? `<div class="parsed"><p>${esc(t("parsed", p.length, nSp))}</p><button type="button" class="btn primary" data-act="${seed ? "seed" : "local-start"}">${esc(seed ? t("seedBtn", p.length) : t("localBtn"))}</button></div>` : ""}
+    ${S.items.length && S.store === "local" ? `<p><button type="button" class="btn ghost" data-act="back-to-sample">← ${esc(t("backToSample"))}</button></p>` : ""}
   </section>`;
 }
 
@@ -828,11 +889,31 @@ function paintItem() {
   document.querySelectorAll("#doc li").forEach((li) => li.classList.toggle("rel", rel.has(Number(li.dataset.ln))));
 }
 
-function renderModalText() {
-  $("modal-title").textContent = t("modalTitle");
-  $("modal-text").textContent = t("modalText");
-  $("modal-copy").textContent = t("copy");
+function renderModalText() { // mode "export": the labels to copy; "name": ask the name before an offline export
+  const name = S.modal === "name";
+  $("modal-title").textContent = t(name ? "nameTitle" : "modalTitle");
+  $("modal-text").textContent = t(name ? "nameHint" : "modalText");
+  $("modal-json").hidden = name;
+  $("modal-name").hidden = !name;
+  $("modal-copy").textContent = t(name ? "saveExport" : "copy");
   $("modal-close").textContent = t("close");
+}
+
+function openModal(mode) {
+  S.modal = mode;
+  renderModalText();
+  if (mode === "name") $("modal-name").value = S.name;
+  $("modal").hidden = false;
+  (mode === "name" ? $("modal-name") : $("modal-copy")).focus();
+}
+
+function saveNameAndExport() {
+  const v = $("modal-name").value.trim();
+  if (!v) { $("modal-name").focus(); return; }
+  setName(v);
+  $("modal").hidden = true;
+  renderBar();
+  exportLabels();
 }
 
 let toastTimer = 0;
@@ -937,8 +1018,8 @@ function startIndex() {
 /* ---------- export ---------- */
 
 function buildExport() {
-  const people = [{ id: who(), self: true, items: S.mine }];
-  if (S.isOwner) for (const o of Object.values(S.others)) people.push({ id: o.id, self: false, items: o.items });
+  const people = [{ id: exportId(), name: S.store === "local" ? S.name : (S.names[S.myId] || ""), self: true, items: S.mine }];
+  if (S.isOwner) for (const o of Object.values(S.others)) people.push({ id: o.id, name: S.names[o.id] || "", self: false, items: o.items });
   const records = [];
   for (const a of people) {
     for (const it of S.items) {
@@ -958,15 +1039,17 @@ function buildExport() {
     format: "span-labels/1", exported: iso(),
     dataset: { hash: S.hash, n_items: S.items.length, n_spans: S.nSpans },
     label_set: LABELS,
-    annotators: people.map((a) => ({ id: a.id, self: a.self, complete: doneCount(a.items) })),
+    annotators: people.map((a) => ({ id: a.id, name: a.name, self: a.self, complete: doneCount(a.items) })),
     records,
   };
 }
 
 async function exportLabels() {
+  if (S.store === "local" && !S.name) { openModal("name"); return; }
   flushNow();
   const json = JSON.stringify(buildExport(), null, 1);
-  const filename = `span_labels_${iso().slice(0, 10)}.json`;
+  const slug = S.store === "local" ? S.name.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-+|-+$/g, "") : "";
+  const filename = `span_labels_${slug ? slug + "_" : ""}${iso().slice(0, 10)}.json`;
   if (S.downloads) {
     try { await S.downloads.save({ filename, data: json }); toast(t("exported")); return; } catch (e) {
       const code = e && e.code;
@@ -982,8 +1065,7 @@ async function exportLabels() {
     return;
   }
   $("modal-json").value = json;
-  $("modal").hidden = false;
-  $("modal-copy").focus();
+  openModal("export");
 }
 
 async function copyExport() {
@@ -1003,11 +1085,33 @@ async function startLabels() {
   renderAll();
 }
 
-function startLocal() {
+function resumeLocal() { // the sample this browser labels, if it keeps one
   const saved = readLocalDataset();
-  if (saved) { S.store = "local"; setDataset(saved); return startLabels(); }
+  if (!saved) return false;
+  S.store = "local";
+  setDataset(saved);
+  keepLocalDataset(saved);
+  startLabels();
+  return true;
+}
+
+function startLocal() {
+  if (resumeLocal()) return;
   S.phase = "upload";
   renderAll();
+}
+
+function startLocalSample(list) {
+  const input = $("who-name");
+  if (input) setName(input.value);
+  if (!S.name) { S.nameError = true; renderMain(); const el = $("who-name"); if (el) el.focus(); return; }
+  S.nameError = false;
+  S.store = "local";
+  setDataset(list);
+  keepLocalDataset(list);
+  S.parsed = null;
+  S.parseError = "";
+  startLabels();
 }
 
 async function seed(list) {
@@ -1101,8 +1205,7 @@ async function boot() {
   }
   S.interrupted = docs.length > 0;
   if (S.isOwner) { S.phase = "upload"; renderAll(); return; }
-  const saved = readLocalDataset();
-  if (saved) { S.store = "local"; setDataset(saved); await startLabels(); return; }
+  if (resumeLocal()) return;
   S.phase = "waiting";
   renderAll();
 }
@@ -1115,16 +1218,12 @@ document.addEventListener("click", (e) => {
     const a = act.dataset.act;
     if (a === "guide") { const g = $("guide"); g.open = !g.open; if (g.open) g.scrollIntoView({ block: "start" }); }
     else if (a === "export") exportLabels();
-    else if (a === "copy") copyExport();
+    else if (a === "copy") (S.modal === "name" ? saveNameAndExport() : copyExport());
     else if (a === "close") $("modal").hidden = true;
     else if (a === "seed" && S.parsed) seed(S.parsed);
-    else if (a === "local-start" && S.parsed) {
-      LS.set("dry:dataset:v1", JSON.stringify(S.parsed));
-      S.store = "local";
-      setDataset(S.parsed);
-      S.parsed = null;
-      startLabels();
-    }
+    else if (a === "local-start" && S.parsed) startLocalSample(S.parsed);
+    else if (a === "another") { S.phase = "upload"; S.parsed = null; S.parseError = ""; renderAll(); }
+    else if (a === "back-to-sample" && S.items.length) { S.phase = "ready"; S.parsed = null; S.parseError = ""; renderAll(); }
     return;
   }
   const nav = e.target.closest("[data-nav]");
@@ -1146,6 +1245,9 @@ document.addEventListener("click", (e) => {
 document.addEventListener("change", (e) => {
   if (e.target.id === "file") handleFile(e.target.files && e.target.files[0]);
 });
+document.addEventListener("input", (e) => {
+  if (e.target.id === "who-name") setName(e.target.value);
+});
 
 document.addEventListener("dragover", (e) => {
   const drop = e.target.closest && e.target.closest("#drop");
@@ -1166,7 +1268,12 @@ document.addEventListener("drop", (e) => {
 });
 
 document.addEventListener("keydown", (e) => {
-  if (!$("modal").hidden) { if (e.key === "Escape") $("modal").hidden = true; return; }
+  if (!$("modal").hidden) {
+    if (e.key === "Escape") $("modal").hidden = true;
+    else if (e.key === "Enter" && e.target.id === "modal-name") { e.preventDefault(); saveNameAndExport(); }
+    return;
+  }
+  if (e.key === "Enter" && e.target.id === "who-name" && S.parsed) { e.preventDefault(); startLocalSample(S.parsed); return; }
   if (S.phase !== "ready" || e.metaKey || e.ctrlKey || e.altKey) return;
   const tag = (e.target && e.target.tagName) || "";
   if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") {
@@ -1190,6 +1297,7 @@ document.addEventListener("keydown", (e) => {
   if (handled) e.preventDefault();
 });
 
+S.name = (LS.get("dry:name:v1") || "").trim().slice(0, 40);
 $("guide").open = LS.get("dry:guide") !== "closed";
 $("guide").addEventListener("toggle", () => LS.set("dry:guide", $("guide").open ? "open" : "closed"));
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushNow(); });

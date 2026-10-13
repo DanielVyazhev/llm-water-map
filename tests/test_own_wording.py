@@ -1,6 +1,10 @@
 """v1.1 (scoring version 9): a fact the response states in its own words is credited (drybench.forms)."""
 
 import json
+import re
+
+import numpy as np
+import pytest
 
 from drybench.backends.mock import MockBackend
 from drybench.cli import main as cli
@@ -61,7 +65,7 @@ def test_cuad_dates_and_terms_match_by_value():
     assert term_spans("It runs for a period of six (6) months.", "five (5) years") == []
     date = Probe("What is the date of this agreement?", ["July 1, 2020", "7/1/2020"], fact_id="cuad:0-1:date",
                  value="July 1, 2020")
-    assert stated_spans(r, date) == [(s, e)]
+    assert stated_spans(r, date) == ([(s, e)], [(s, e)])  # (all spans, found by value)
 
 
 def test_a_fact_in_the_responses_own_words_is_credited_and_kept():
@@ -106,13 +110,14 @@ def test_score_cli_records_added_answers_and_can_score_like_v1_0(tmp_path):
     assert old["facts"] == 0.0 and old["added_answers"] == []
 
 
-def test_runs_scored_before_v1_1_are_rescored_in_full():
+def test_runs_scored_before_v1_2_are_rescored_in_full():
     from drybench import SCORING_VERSION
     from drybench.rescore import plan
 
-    assert SCORING_VERSION == "9"
+    assert SCORING_VERSION == "10"
     for reader in ("Qwen/Qwen2.5-3B-Instruct", "microsoft/Phi-3.5-mini-instruct", None):
         assert plan("8", "9", reader) == "all" and plan("7", "9", reader) == "all"
+        assert plan("9", "10", reader) == "all" and plan("8", "10", reader) == "all"
 
 
 # ---------------------------------------------------------------- after review: what must not be credited
@@ -167,3 +172,68 @@ def test_a_fact_restated_in_other_words_is_a_duplicate_not_a_wrong_statement():
     assert [s.kept for s in new.spans] == [True, False]
     assert old.spans[1].kind == "misleading" and old.W_misleading > 0  # v1.0.0
     assert new.spans[1].kind == "duplicate" and new.W_misleading == 0
+
+
+# ---------------------------------------------------------------- v1.2: a longer name or number is another answer
+
+def _cands(r, forms, **kw):
+    return [x for x, _ in candidates(r, answer_spans(r, forms), **kw)]
+
+
+def test_a_name_that_ends_with_the_gold_is_another_answer():
+    for r, gold in (("It is governed by the laws of West Virginia.", "Virginia"),
+                    ("The office is in New Mexico.", "Mexico"), ("He was born in Northern Ireland.", "Ireland"),
+                    ("They sailed to Lake Michigan.", "Michigan")):
+        assert all(x == gold for x in _cands(r, [gold])), (r, _cands(r, [gold]))
+    r = "The treaty was signed by John Quincy Adams."
+    assert _cands(r, ["Adams"], keep_words={"john", "adams"}, long_gold=True) == ["Adams"]
+    # a first name before a gold surname, a title before a gold name: the same answer
+    assert "Leonhard Euler" in _cands("It was proved by Leonhard Euler.", ["Euler"])
+    assert "King George VI" in _cands("He played the future King George VI.", ["George VI"])
+    assert "John Quincy Adams" in _cands(r, ["John Quincy Adams"])
+
+
+def test_a_number_that_ends_with_the_gold_is_another_answer():
+    assert _cands("The term is twenty-five years.", ["five"]) == ["five"]    # the gold form itself only
+    assert _cands("The term is twenty five years.", ["five"]) == ["five"]
+    r = "an initial term of twenty-one-year duration"
+    assert term_spans(r, "one (1) year") == []
+    assert [r[a:b] for a, b in term_spans(r, "twenty-one (21) years")] == ["twenty-one-year"]
+    from drybench.cuad import _duration_key
+
+    assert _duration_key("seventy-two months") == (72, "month") and _duration_key("eighty (80) months") == (80, "month")
+
+
+def test_numeric_dates_are_offered():
+    date = Probe("What is the date of this agreement?", ["July 1, 2020"], fact_id="cuad:0-1:date", value="July 1, 2020")
+    for r, want in (("Date: 07/01/2020", "07/01/2020"), ("Agreement date: 2020-07-01.", "2020-07-01")):
+        spans, by_value = stated_spans(r, date)
+        assert want in [x for x, _ in candidates(r, spans, exempt=by_value)], r
+
+
+def test_a_number_reply_must_end_where_the_gold_ends():
+    """'70' is not credited when the reply goes on with a digit ('700'): tokens of digits that extend it."""
+    from drybench.backends.base import LMBackend
+
+    class Digits(LMBackend):  # one character per token; the reply copies the first number of the message
+        name = "digits"
+
+        def encode(self, text):
+            return list(text)
+
+        def continuation_logprobs(self, requests):
+            out = []
+            for c, k in requests:
+                num = re.search(r"\d+", c.rsplit("Message:", 1)[-1])
+                reply = " " + (num.group(0) if num else "unknown")
+                out.append(0.0 if reply.startswith(k) else -30.0)
+            return np.array(out, float)
+
+        token_entropies = next_token_entropy = generate = None
+
+    b = Digits()
+    ctx = "Message: The price is 700 dollars. Question: How much? Answer:"
+    plain, term = b.continuation_logprobs([(ctx, " 70")])[0], b.terminated_logprobs([(ctx, " 70")])[0]
+    assert plain == 0.0 and term < -20
+    ctx2 = "Message: The price is 70 dollars. Question: How much? Answer:"
+    assert b.terminated_logprobs([(ctx2, " 70")])[0] == pytest.approx(0.0, abs=1e-6)

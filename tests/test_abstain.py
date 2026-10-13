@@ -54,3 +54,22 @@ def test_phrasings_and_items_without_a_missing_fact():
         assert not ABSTAIN.search(text), text
     answerable = next(it for it in generate_items(n_per_cell=1, seed=0) if it.knobs["answerable"])
     assert abstains("Not stated.", answerable) is None
+
+
+def test_phrasings_added_in_v1_2():
+    for text in ("I cannot determine the carrier.", "It is not possible to determine the date.",
+                 "The date could not be determined.", "Unable to determine.", "The governing law isn't specified.",
+                 "It has not been specified.", "There is no governing law clause in the excerpt.", "N/A",
+                 "Not applicable."):
+        assert ABSTAIN.search(text), text
+    it = _item(["What is the title of this agreement?", "Which jurisdiction's law governs this agreement?"], 1)
+    assert abstains("1. Endorsement Agreement\n2. The excerpt doesn’t mention the governing law.", it)  # ’
+    # a number that is no question's number: the topic decides
+    assert abstains("1. Endorsement Agreement\n3. The governing law is not specified in the excerpt.", it)
+
+
+def test_the_phrase_and_the_topic_stand_in_one_clause():
+    two = _item(["Which carrier handled shipment AB-1234?", "What caused the delay of shipment AB-1234?"], 0)
+    assert not abstains("The report gives no details about the delay; the carrier was Dralor Cargo.", two)
+    assert not abstains("We cannot determine which type of ship it was, but the carrier is Dralor Cargo.", two)
+    assert abstains("The carrier is not stated; the delay was caused by a storm.", two)

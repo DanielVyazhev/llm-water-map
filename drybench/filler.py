@@ -9,14 +9,18 @@ whatever the reader's prior. A relative tolerance delta * I_j(y) (ablation) grow
 answer itself. The kept spans form y*; deleted spans are the filler map.
 
 Deleted spans are then read one by one (chat readers) and split into
-  duplicate      restates a fact the response delivers elsewhere        -> filler
-  uninformative  the reader learns nothing about any probe from it      -> filler
   misleading     the reader confidently answers something else (a wrong fact or another
                  entity's fact)                                        -> not filler, an error
-so W_filler = W_uninformative + W_duplicate and W = W_filler + W_misleading.
+  duplicate      restates a fact the response delivers elsewhere        -> filler
+  uninformative  the reader learns nothing about any probe from it      -> filler
+so W_filler = W_uninformative + W_duplicate and W = W_filler + W_misleading. A wrong statement
+counts as wrong even when it also restates a fact (v1.2; the annotation guidelines: wrong first).
 
-Complexity: greedy needs O(n^2) message evaluations for n spans; "loo" needs 2n
-(leave-one-out drops, then the longest admissible removal prefix in that order).
+Of two statements of the same fact the first one is kept and the later one deleted, when the
+tolerance allows either (v1.2, the guidelines: "the first full statement is Needed").
+
+Complexity (messages read, each once per probe): greedy O(n^2) for n spans; "loo" n + 1 for the
+leave-one-out costs, then one per prefix of the queue in each round, O(n^2) in the worst case.
 """
 
 from __future__ import annotations
@@ -61,8 +65,9 @@ class DryResult:
     tokens_kept: int
     W: float                         # removable fraction 1 - |y*|/|y| (NaN if no signal)
     density_bits_per_token: float    # I(y) / ln2 / tokens
-    kappa: float | None = None       # sum_j max(I_j(y), 0) / I(y0)  (completeness)
-    info_gold: float | None = None
+    kappa: float | None = None       # sum_j min(max(I_j(y), 0), max(I_j(y0), 0)) / sum_j max(I_j(y0), 0)
+    info_gold: float | None = None   # sum_j max(I_j(y0), 0)
+    gold_per_probe: list[float] = field(default_factory=list)  # I_j(y0), nats
     status: str = "ok"               # ok | no_signal | reader_fail
     per_probe: list[float] = field(default_factory=list)      # I_j(y), nats (floored prior)
     per_probe_lp: list[float] = field(default_factory=list)   # log p_R(gold_j | y), no floor
@@ -117,6 +122,70 @@ def _feasible(pp_new: np.ndarray, pp_full: np.ndarray, delta: float, abs_tol: fl
     return np.all((pp_new >= pp_full - slack - 1e-12) | ~active[None, :], axis=1)
 
 
+def _states_wrong(reader: Reader, request: str, texts: Sequence[str], probes: Sequence[Probe],
+                  other_mass: float = 0.5) -> np.ndarray:
+    """[n_texts] True where the reader, reading the text alone, confidently gives a wrong answer to a probe it
+    would not answer wrongly without a message (the 'misleading' test of classify_removed, without excuses)."""
+    if not texts or not reader.config.use_chat:
+        return np.zeros(len(texts), bool)
+    both = wrong_answer_mass(reader, request, list(texts) + [""], probes)
+    return np.any((both[:-1] >= other_mass) & (both[-1:] < other_mass), axis=1)
+
+
+def _keep_first_statements(reader: Reader, request: str, spans: Sequence[Span], probes: Sequence[Probe],
+                           keep: list[bool], full: np.ndarray, abs_tol: float, feasible: Callable,
+                           movable: set[int] | None = None
+                           ) -> tuple[list[tuple[list[int], int]], np.ndarray | None, int]:
+    """Of two statements of a fact, keep the first (the annotation guidelines: later repeats are filler).
+
+    Statements: deleted spans that alone give a delivered fact (at least max(abs_tol, I_j / 2), as a
+    duplicate) and are not wrong statements. For each kept span k, from the last one (`movable`: only these),
+    the statements before it are restored and k deleted; if that keeps every delivered fact within the
+    tolerance, the restored statements that are not needed then are deleted again, the latest first, and
+    the change stands. `keep` is updated in place. Returns the changes (restored spans, deleted span), the
+    per-probe information of the final message (None: no change) and the messages read."""
+    delivered = full >= abs_tol
+    later = [k for k, kk in enumerate(keep) if kk and (movable is None or k in movable)]
+    removed = [i for i, k in enumerate(keep) if not k and any(j > i for j in later)]
+    if not removed or not delivered.any():
+        return [], None, 0
+    alone = reader.per_probe_information(request, [spans[i].text for i in removed], probes)
+    reads = len(removed)
+    states = [i for r, i in enumerate(removed) if np.any(delivered & (alone[r] >= np.maximum(abs_tol, 0.5 * full)))]
+    if states:
+        wrong = _states_wrong(reader, request, [spans[i].text for i in states], probes)
+        states = [i for i, w in zip(states, wrong) if not w]
+
+    def read(mask: list[bool]) -> np.ndarray:
+        return reader.per_probe_information(request, [join_spans(list(spans), mask)], probes)
+
+    changes: list[tuple[list[int], int]] = []
+    last: np.ndarray | None = None
+    for k in sorted(later, reverse=True):
+        before = [d for d in states if d < k and not keep[d]]
+        if not keep[k] or not before:
+            continue
+        trial = list(keep)
+        for d in before:
+            trial[d] = True
+        trial[k] = False
+        pp = read(trial)
+        reads += 1
+        if not bool(feasible(pp)[0]):
+            continue
+        for d in sorted(before, reverse=True):  # restored statements the message does not need go again
+            t2 = list(trial)
+            t2[d] = False
+            pp2 = read(t2)
+            reads += 1
+            if bool(feasible(pp2)[0]):
+                trial, pp = t2, pp2
+        keep[:] = trial
+        changes.append(([d for d in before if trial[d]], k))
+        last = pp[0]
+    return changes, last, reads
+
+
 def filler_map(
     reader: Reader,
     request: str,
@@ -130,6 +199,7 @@ def filler_map(
     abs_tol: float = 0.5,
     tie_tol: float = 1e-3,
     loo_skip: bool = True,
+    keep_first: bool = True,
 ) -> DryResult:
     """Compute I(y), W and the per-span filler map for a pre-segmented message.
 
@@ -145,6 +215,13 @@ def filler_map(
     round by round, so one span that cannot go with the others does not keep every span queued
     after it. Each round is checked jointly; loo_skip=False (v0.7.1 and before) stops after the
     first round and deletes a subset of the same spans.
+
+    keep_first (v1.2): afterwards, of two statements of the same fact the first is kept
+    (_keep_first_statements); False: the search's choice stands (v1.1 and before).
+
+    A response that delivers less than min_info nats over its delivered facts (sum of max(I_j, 0)) delivers
+    nothing: status 'no_signal', no map. Up to v1.1 the signed sum decided, so a wrong statement about one
+    fact could hide a delivered one.
     """
     if mode not in ("greedy", "loo"):
         raise ValueError("mode must be 'greedy' or 'loo'")
@@ -164,7 +241,7 @@ def filler_map(
                 per_probe=per_probe.tolist(), per_probe_lp=per_probe_lp.tolist(),
                 prior_floor=reader.config.prior_floor, spans=res_spans, mode=mode, delta=delta,
                 constraint=constraint, abs_tol=abs_tol)
-    if not spans or info_full < min_info:
+    if not spans or float(np.clip(per_probe, 0.0, None).sum()) < min_info:
         return DryResult(info_kept=info_full, tokens_kept=total, W=float("nan"), status="no_signal",
                          n_evals=n_evals, **base)
 
@@ -224,6 +301,21 @@ def filler_map(
             keep[i] = False
             res_spans[i].kept, res_spans[i].removal_rank = False, rank
             res_spans[i].drop = float(drops[i])
+
+    if keep_first and constraint == "per_probe":
+        movable = {i for i, sr in enumerate(res_spans) if sr.candidate} if mode == "loo" else None
+        changes, pp_last, reads = _keep_first_statements(reader, request, spans, probes, keep, per_probe,
+                                                         abs_tol, feasible, movable)
+        n_evals += reads
+        if changes:
+            rank = max((sr.removal_rank for sr in res_spans if sr.removal_rank is not None), default=-1) + 1
+            for restored, k in changes:
+                for d in restored:
+                    res_spans[d].kept, res_spans[d].removal_rank, res_spans[d].drop = True, None, None
+                res_spans[k].kept, res_spans[k].removal_rank = False, rank
+                res_spans[k].drop = res_spans[k].loo_cost
+                rank += 1
+            info_kept = float(pp_last.sum())
 
     kept_tokens = int(sum(l for l, k in zip(lengths, keep) if k))
     return DryResult(info_kept=float(info_kept), tokens_kept=kept_tokens,
@@ -322,7 +414,8 @@ def misleading_excuse(text: str, item: Item) -> str | None:
     if item.knobs.get("source", "synthetic") != "synthetic":
         return "true statement" if supported_by_document(words, item.document) else None
     own = {rec["sid"] for rec in (item.meta.get("target"), item.meta.get("twin")) if rec}
-    if set(SHIPMENT_ID.findall(text)) - own:
+    named = set(SHIPMENT_ID.findall(text))
+    if named - own and not named & own:  # about another shipment only (v1.2: not when it also names the target)
         return "other shipment"
     low = text.lower()
     for attr, forms in _true_values(item):
@@ -365,13 +458,14 @@ def classify_removed(reader: Reader, request: str, spans: Sequence[Span], probes
     """Label every span of `res` (in place) and fill the W_* split.
 
     Each deleted span is read on its own:
-      duplicate   I_j(span) >= max(abs_tol, dup_frac * I_j(y)) for a probe the response delivers
       misleading  the reader puts >= other_mass on answers that are neither gold nor an absence
                   reply ('unknown', 'not stated', ...), while with an empty message it does not,
                   and the span is not excused by misleading_excuse (needs `item`); being a true
                   statement of the document is no excuse for a span that answers that question
                   itself (answer_attempts): a true sentence can be the wrong answer
+      duplicate   otherwise, I_j(span) >= max(abs_tol, dup_frac * I_j(y)) for a probe the response delivers
       uninformative  otherwise
+    Up to v1.1 a duplicate was never misleading, so a summary with a wrong value counted as filler.
     Needs a chat reader told to answer 'unknown' (ReaderConfig.use_chat); with other readers
     deleted spans are labelled 'removed' and all count as filler.
     own_wording (v1.1): a span read alone also gets its own wording of a fact accepted
@@ -413,7 +507,7 @@ def classify_removed(reader: Reader, request: str, spans: Sequence[Span], probes
         excuse = misleading_excuse(spans[i].text, item) if item is not None else None
         attempt = bool(np.any(wrong & answer_attempts(spans[i].text, request, probes)))
         mis = bool(np.any(wrong)) and (excuse is None or (excuse == "true statement" and attempt))
-        kind = "duplicate" if dup else ("misleading" if mis else "uninformative")
+        kind = "misleading" if mis else ("duplicate" if dup else "uninformative")
         res.spans[i].kind = kind
         if kind == "misleading":
             res.spans[i].attempt = attempt
@@ -440,12 +534,14 @@ def dry_score(
     classify: bool = True,
     loo_skip: bool = True,
     own_wording: bool = True,
+    keep_first: bool = True,
 ) -> DryResult:
     """Full scoring of one response to one item (required probes only).
 
     own_wording (v1.1, scoring version 9): a fact the response states in its own words ("Matthew Perry"
     for the gold "matthew perry", "the State of Delaware" for "Delaware") is read with that wording too
-    (drybench.forms); False scores with the gold forms only, as v1.0.0 did."""
+    (drybench.forms); False scores with the gold forms only, as v1.0.0 did.
+    keep_first (v1.2): of two statements of a fact the first is kept (filler_map)."""
     spans = list(spans) if spans is not None else segment(response, segment_mode)
     added: list[list[str]] = []
     if own_wording:
@@ -455,40 +551,55 @@ def dry_score(
     probes = item.required_probes
     res = filler_map(reader, item.request, spans, probes, delta=delta, mode=mode,
                     length_fn=length_fn, min_info=min_info, constraint=constraint, abs_tol=abs_tol,
-                    loo_skip=loo_skip)
+                    loo_skip=loo_skip, keep_first=keep_first)
     res.added_answers = added
     if classify and res.status == "ok":
         classify_removed(reader, item.request, spans, probes, res, item=item, own_wording=own_wording)
     if with_kappa:
-        gold = float(reader.information(item.request, [item.gold_minimal], probes)[0])
+        gold_spans = segment(item.gold_minimal, segment_mode)
+        gold_msg = join_spans(gold_spans)  # read as responses are read (v1.2: line breaks too)
+        gold_pp = reader.per_probe_information(item.request, [gold_msg], probes)[0]
+        gold = float(np.clip(gold_pp, 0.0, None).sum())
         res.info_gold = gold
+        res.gold_per_probe = gold_pp.tolist()
         p_resp = np.exp(np.asarray(res.per_probe_lp, float))
-        p_gold = np.exp(reader.probe_logprobs(item.request, [item.gold_minimal], probes)[0])
+        p_gold = np.exp(reader.probe_logprobs(item.request, [gold_msg], probes)[0])
         res.per_probe_p, res.gold_per_probe_p = p_resp.tolist(), p_gold.tolist()
         readable = p_gold >= 0.5  # a missing fact counts too: the response should say it is not stated
         res.facts = float(np.mean(p_resp[readable] >= 0.5)) if readable.any() else float("nan")
         count = length_fn or reader.backend.count_tokens  # same token count as the response spans
-        res.tokens_gold = int(sum(max(1, count(s.text)) for s in segment(item.gold_minimal, segment_mode)))
+        res.tokens_gold = int(sum(max(1, count(s.text)) for s in gold_spans))
         if gold < min_info:
             res.status = "reader_fail"
             res.kappa = float("nan")
         else:
-            res.kappa = completeness(res.per_probe, gold)
+            res.kappa = completeness(res.per_probe, gold_pp)
             if res.status == "ok" and res.kappa > 0 and res.tokens_gold:
                 res.wording = res.tokens_kept / res.tokens_gold
                 res.overhead = res.tokens / (res.kappa * res.tokens_gold)
     return res
 
 
-def completeness(per_probe: Sequence[float], info_gold: float) -> float:
-    """kappa = sum_j max(I_j(y), 0) / I(y0): the share of the gold answer's information the response
-    delivers. A fact the response contradicts counts as not delivered (0), not as negative: with a
-    reader that has a prior for it (say p('not stated' | no message) = 0.08), a made-up value would
-    otherwise cost ~11 nats and drive kappa of a one-fact answer to -4.5, a reader-dependent penalty
-    (v0.7.3 and before). Wrong statements are measured separately (W_misleading, facts)."""
-    if info_gold is None or not np.isfinite(info_gold) or info_gold <= 0:
+def completeness(per_probe: Sequence[float], gold_per_probe: Sequence[float] | float) -> float:
+    """kappa = sum_j min(max(I_j(y), 0), max(I_j(y0), 0)) / sum_j max(I_j(y0), 0): the share of the gold
+    answer's information the response delivers, fact by fact, so 0 <= kappa <= 1.
+
+    A fact the response contradicts counts as not delivered (0), not as negative: with a reader that has a
+    prior for it (say p('not stated' | no message) = 0.08), a made-up value would otherwise cost ~11 nats and
+    drive kappa of a one-fact answer to -4.5, a reader-dependent penalty (v0.7.3 and before). Wrong
+    statements are measured separately (W_misleading, facts). A fact counts at most as much as the gold gives
+    it (v1.2): up to v1.1 a response read better than a poorly read gold had kappa above 1 (up to 2.2) and
+    overhead below 1. A plain number as the second argument is the gold's total (up to v1.1)."""
+    pp = np.clip(np.asarray(per_probe, float), 0.0, None)
+    if np.ndim(gold_per_probe) == 0:
+        info_gold = float(gold_per_probe)
+        if not np.isfinite(info_gold) or info_gold <= 0:
+            return float("nan")
+        return float(pp.sum() / info_gold)
+    gp = np.clip(np.asarray(gold_per_probe, float), 0.0, None)
+    if not np.isfinite(gp).all() or gp.sum() <= 0:
         return float("nan")
-    return float(np.clip(np.asarray(per_probe, float), 0.0, None).sum() / info_gold)
+    return float(np.minimum(pp, gp).sum() / gp.sum())
 
 
 def cost_per_bit(tokens: int, info_nats: float, price_per_token: float) -> float:

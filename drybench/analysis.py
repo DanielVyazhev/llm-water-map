@@ -63,7 +63,7 @@ def build_tables(items: Iterable[Item], scored: Iterable[dict], signals: Iterabl
         if r.get("per_probe") and r.get("info_gold") and r["status"] != "reader_fail":
             # completeness from the stored gains (a contradicted fact counts 0, not negative), so
             # scores made before v0.7.4 give the same tables as new ones
-            kappa = completeness(r["per_probe"], r["info_gold"])
+            kappa = completeness(r["per_probe"], r.get("gold_per_probe") or r["info_gold"])
             tg = r.get("tokens_gold")
             overhead = r["tokens"] / (kappa * tg) if r["status"] == "ok" and kappa > 0 and tg else np.nan
         row = {"model": key[0], "variant": key[1], "item_id": key[2], **knobs[key[2]],
@@ -76,10 +76,14 @@ def build_tables(items: Iterable[Item], scored: Iterable[dict], signals: Iterabl
                "wording": r.get("wording", np.nan), "overhead": overhead,
                "facts": r.get("facts", np.nan),
                "W_ablation": _filler(ab or None), "W_removable_ablation": ab.get("W", np.nan),
-               "kappa": kappa, "info": r["info"], "status": r["status"]}
+               "kappa": kappa, "info": r["info"], "status": r["status"],
+               # v1.2: the response was cut at the token limit (None: not recorded)
+               "truncated": r.get("truncated")}
         j = miss_j[key[2]]
         row["missing"] = j is not None
-        row["abstains"] = abstains(" ".join(sp["text"] for sp in r["spans"]), items[key[2]]) if j is not None else None
+        # one fragment per line, so a numbered answer keeps its numbers (joined by spaces, "2." would end up
+        # inside the line before it)
+        row["abstains"] = abstains("\n".join(sp["text"] for sp in r["spans"]), items[key[2]]) if j is not None else None
         lp = r.get("per_probe_lp") or []
         row["p_missing"] = float(np.exp(lp[j])) if j is not None and j < len(lp) else np.nan
         item_rows.append(row)
@@ -90,7 +94,7 @@ def build_tables(items: Iterable[Item], scored: Iterable[dict], signals: Iterabl
             kind = kinds[i]
             span_rows.append({"model": key[0], "variant": key[1], "item_id": key[2], "span_idx": i,
                               "tokens": sp["tokens"], "kept": sp["kept"], "kind": kind,
-                              "h_span": np.nan if h is None else h, "text": sp["text"]})
+                              "h_span": np.nan if h is None else h, "text": sp["text"], "status": r["status"]})
     return pd.DataFrame(item_rows), pd.DataFrame(span_rows)
 
 

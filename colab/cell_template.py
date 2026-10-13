@@ -23,7 +23,7 @@ DTYPE = "fp16"                       # T4 has no bf16; use "fp32" if a step repo
 BATCH = 16                           # generation batch size
 USE_DRIVE = True                     # keep outputs in Google Drive (survives disconnects); False: /content
 RUN_ROOT = "/content/drybench_runs"
-RUN_NAME = "t4_n20"                  # new name = fresh run; same name = resume
+RUN_NAME = "t4_n20_v12"              # new name = fresh run; same name = resume
 ALLOW_CPU = False
 # ---- end settings ----
 

@@ -4,7 +4,7 @@
 
 ```bash
 pip install -e ".[hf,plot,dev]"      # add ".[onnx]" for the CPU GPT-2 pilot
-python -m pytest -q                    # 161 tests (3 skip without local data); mock reader, no GPU
+python -m pytest -q                    # 194 tests (3 skip without local data); mock reader, no GPU
 ```
 
 Runs with real models need a GPU.
@@ -21,7 +21,10 @@ flowchart TD
     F --> G["Tables, figures, zip"]
 ```
 
-Every step appends to JSONL and resumes after an interruption. A new `--run` name starts a new run.
+Every step appends to JSONL and resumes after an interruption; a last line cut by an interrupted write is dropped
+before the next append. Responses and scores store their settings (model and revision, dtype, decoding, token
+limit; reader, scoring version and options): a resumed step with other settings stops instead of mixing rows
+(v1.2). A new `--run` name starts a new run.
 
 ## Colab
 
@@ -32,30 +35,35 @@ The notebooks embed the package; nothing to upload. `python scripts/make_colab.p
 | `colab/drybench_colab.ipynb` | synthetic reports: 3 models × 2 prompts; second reader in its own cell | T4, ~50 min for 300 items; second reader ~45 min |
 | `colab/real_texts_colab.ipynb` | SQuAD 2.0, MuSiQue, CUAD, Poddar et al.; checks R1–R6 | T4, ~3 h; resumes from Google Drive |
 | `colab/missing_check_colab.ipynb` | ways to ask a reader about a missing fact | T4, ~15 min |
+| `colab/dev_baselines_a100.ipynb` | LLM judge (Phi-4) and Selective Context on both development runs; development values of the confirmatory tests | A100, 1–2 h |
 | `colab/final_a100.ipynb` | confirmation run ([PROTOCOL.md](PROTOCOL.md)) | A100, 8–12 h; HF token with Llama and Gemma access |
 
 ## GPU server
 
 ```bash
-python -m pip install -e ".[hf]" accelerate gdown huggingface_hub matplotlib
+python -m pip install -e ".[hf,data,plot]"
 python scripts/run_synthetic.py --run runs/syn_v1 --n-per-cell 30 --seed 1 --models qwen2.5-7b=Qwen/Qwen2.5-7B-Instruct \
     --readers2 phi3.5-mini=microsoft/Phi-3.5-mini-instruct --judges phi-4=microsoft/phi-4 \
     --selective qwen2.5-3b=Qwen/Qwen2.5-3B-Instruct --missing-check
 python scripts/run_real.py --run runs/real_v1                          # 4 models up to 7B by default
 python scripts/run_real.py --run runs/cuad_only --suites cuad --n-per-cell 30
-python scripts/run_final.py --run runs/final_v1 --dev-items runs/real_t4_n15/items.jsonl   # confirmation run
+python scripts/run_final.py --print-hash                              # version and code hash for the registration
+python scripts/run_final.py --run runs/final_v1 \
+    --dev-items results/dev_v1.0/real/items.jsonl runs/real_t4_n15_v12/items.jsonl   # confirmation run
 ```
 
 Single steps:
 
 ```bash
 drybench items    --out items.jsonl --n-per-cell 30
-drybench generate --items items.jsonl --out resp.jsonl --backend hf --model Qwen/Qwen2.5-7B-Instruct --model-name qwen7b
+drybench generate --items items.jsonl --out resp.jsonl --backend hf --model Qwen/Qwen2.5-7B-Instruct --model-name qwen7b \
+                  --variant default concise --max-new-tokens 400                                   # plain greedy
 drybench signals  --items items.jsonl --responses resp.jsonl --out sig.jsonl --backend hf --model Qwen/Qwen2.5-7B-Instruct --model-name qwen7b
 drybench score    --items items.jsonl --responses resp.jsonl --out scored.jsonl --reader-backend hf \
                   --reader Qwen/Qwen2.5-3B-Instruct --mode loo
 drybench analyze  --items items.jsonl --scored scored.jsonl --signals sig.jsonl --out-dir report/
 python -m drybench.report RUN                                         # tables of a run again
+drybench confirm --run RUN --labels span_labels_*.json                # the confirmatory tests (PROTOCOL.md)
 ```
 
 ## Run folder
@@ -69,6 +77,7 @@ RUN/
   report/                                                      CSV tables, figures
   tables_synthetic.md | tables_real.md                         all tables
   annotation/                                                  samples for people (confirmation run)
+  protocol.json  hardware.json  confirmatory.md                confirmation run: settings, GPUs, the eight tests
 ```
 
 `scored.jsonl`, one row per response: `info`, `W` (removable), `W_filler` (filler), `W_misleading` (wrong),
@@ -90,14 +99,16 @@ flowchart TD
     R2 --> T
 ```
 
-v1.1.0 (scoring version 9) rescores everything. To rescore the development runs:
+v1.2.0 (scoring version 10) also changes SQuAD 2.0 items and decoding, so the development runs are made again under
+new names instead of rescored:
 
-1. Rerun `colab/real_texts_colab.ipynb` on run `real_t4_n15` and `colab/drybench_colab.ipynb` on run `t4_n20`, the
-   same Google Drive folders.
-2. Compare the tables with `results/dev_v1.0`; the synthetic ones should barely move.
-3. Check `added_answers` in `scored.jsonl`, above all wordings with a comma, a bracket, "not" or "or" before the
-   answer, and very short ones.
-4. Then the confirmation run.
+1. `colab/drybench_colab.ipynb`, `RUN_NAME = "t4_n20_v12"` (the default), then its second-reader cell.
+2. `colab/real_texts_colab.ipynb`, `RUN_NAME = "real_t4_n15_v12"` (the default).
+3. `colab/dev_baselines_a100.ipynb` on an A100: the judge and Selective Context on both runs, the tables again, the
+   development values of the confirmatory tests, everything in `dev_v12_results.zip`.
+4. Compare with `results/dev_v1.0`; check `added_answers` in `scored.jsonl`, above all wordings with a comma, a
+   bracket, "not" or "or" before the answer, and very short ones.
+5. Registration ([PROTOCOL.md](PROTOCOL.md#registration)), then `colab/final_a100.ipynb`.
 
 ## Looking inside a run
 

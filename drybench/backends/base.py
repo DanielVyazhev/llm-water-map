@@ -84,6 +84,32 @@ class LMBackend(ABC):
     def continuation_logprobs(self, requests: Sequence[tuple[str, str]]) -> np.ndarray:
         """Sum of log p(continuation tokens | context) for each (context, continuation)."""
 
+    def terminated_logprobs(self, requests: Sequence[tuple[str, str]]) -> np.ndarray:
+        """log p(continuation, and the text after it does not go on with a digit) for each (context,
+        continuation): a reply "70" read as "700" is not the answer "70".
+
+        Default: the continuation's probability minus that of the continuation followed by each digit whose
+        tokens extend the continuation's tokens (a digit merged into another token is another reply already).
+        Backends with logits use the next-token distribution."""
+        if not requests:
+            return np.zeros(0)
+        lp = np.asarray(self.continuation_logprobs(requests), float)
+        ext, owner = [], []
+        for i, (c, k) in enumerate(requests):
+            base = self.encode(k)
+            for d in "0123456789":
+                if self.encode(k + d)[: len(base)] == base:
+                    ext.append((c, k + d))
+                    owner.append(i)
+        if not ext:
+            return lp
+        mass = np.full(len(requests), -np.inf)
+        for i, v in zip(owner, np.asarray(self.continuation_logprobs(ext), float)):
+            mass[i] = np.logaddexp(mass[i], v)
+        with np.errstate(over="ignore", invalid="ignore"):
+            frac = np.clip(np.nan_to_num(np.exp(mass - lp), nan=0.0), 0.0, 1.0 - 1e-12)
+        return lp + np.log1p(-frac)
+
     def first_token_logmass(self, contexts: Sequence[str], strings: Sequence[str]) -> np.ndarray:
         """log p(the text after each context starts with the first token of one of `strings`).
 
@@ -127,6 +153,18 @@ class LMBackend(ABC):
     def generate(self, context: str, max_new_tokens: int = 256, temperature: float = 0.0,
                  seed: int | None = None) -> str:
         """Continuation text (greedy when temperature == 0)."""
+
+    def generate_batch_info(self, contexts: Sequence[str], max_new_tokens: int = 256, temperature: float = 0.0,
+                            seed: int | None = None) -> list[dict]:
+        """Per context: text, new tokens and whether the model ended the text itself (None: unknown here)."""
+        gen = getattr(self, "generate_batch", None)
+        texts = (gen(list(contexts), max_new_tokens, temperature, seed) if gen is not None
+                 else [self.generate(c, max_new_tokens, temperature, seed=seed) for c in contexts])
+        return [{"text": t, "n_tokens": self.count_tokens(t), "finished": None} for t in texts]
+
+    def describe(self) -> dict:
+        """What was loaded (HFBackend adds the hub commit, dtype and dropped generation settings)."""
+        return {"name": self.name}
 
     def format_chat(self, messages: list[dict[str, str]]) -> str:
         """Plain formatting for models without a chat template."""

@@ -82,3 +82,32 @@ def test_items_update_probes_rewrites_answer_forms(tmp_path):
     items.write_text("".join(json.dumps(r) + "\n" for r in old))
     main(["items", "--out", str(items), "--update-probes"])
     assert list(read_jsonl(items)) == fresh
+
+
+def test_resume_refuses_other_settings(tmp_path):
+    """v1.2: a run resumed with another model, token limit or scoring setting stops instead of mixing rows."""
+    import pytest
+
+    items, resp, scored = tmp_path / "items.jsonl", tmp_path / "resp.jsonl", tmp_path / "scored.jsonl"
+    main(["items", "--out", str(items), "--n-per-cell", "1"])
+    gen = ["generate", "--items", str(items), "--out", str(resp), "--backend", "mock", "--model-name", "m1"]
+    main(gen)
+    rows = list(read_jsonl(resp))
+    assert all(r["gen"]["max_new_tokens"] == 320 and r["gen"]["decoding"] == "plain" for r in rows)
+    assert all("truncated" in r and "n_tokens" in r for r in rows)
+    first = rows[0]["item_id"]
+    resp.write_text("".join(json.dumps(r) + "\n" for r in rows if r["item_id"] != first))
+    with pytest.raises(SystemExit, match="max_new_tokens"):
+        main(gen + ["--max-new-tokens", "10"])
+    main(gen)  # same settings: resumes
+    assert sum(1 for _ in read_jsonl(resp)) == len(rows)
+
+    score = ["score", "--items", str(items), "--responses", str(resp), "--out", str(scored), "--reader-backend", "mock"]
+    main(score)
+    srows = list(read_jsonl(scored))
+    assert all(r["settings"]["mode"] == "loo" and r["settings"]["keep_first"] for r in srows)
+    scored.write_text("".join(json.dumps(r) + "\n" for r in srows[1:]))
+    with pytest.raises(SystemExit, match="abs_tol"):
+        main(score + ["--abs-tol", "2.0"])
+    main(score)
+    assert sum(1 for _ in read_jsonl(scored)) == len(srows)

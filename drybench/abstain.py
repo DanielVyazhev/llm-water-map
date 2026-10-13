@@ -29,19 +29,26 @@ from drybench.segment import segment
 from drybench.types import Item
 
 _VERB = r"(?:say|state|mention|specify|provide|include|contain|indicate|give|list|name|identify|report|show)"
-# phrases that say something is not given, in any wording (v0.7.4–v0.8.1: the first eleven alternatives)
+_PARTICIPLE = (r"(?:stated|specified|mentioned|provided|given|available|included|listed|indicated|disclosed|found|"
+               r"known|clear|identified|reported|recorded|named|described|defined|determined)")
+# phrases that say something is not given, in any wording (v0.7.4–v0.8.1: the first eleven alternatives;
+# v1.2: "cannot determine", "isn't specified", "no governing law clause", "N/A", curly apostrophes)
 ABSTAIN = re.compile(
-    r"\b(?:not (?:\w+ )?(?:stated|specified|mentioned|provided|given|available|included|listed|indicated|"
-    r"disclosed|found|known|clear|identified|reported|recorded|named|described|defined)|unspecified|unknown|"
-    r"undisclosed|no (?:\w+ ){0,2}(?:information|mention|details?|data|record|indication|reference)|"
+    r"\b(?:not (?:\w+ )?" + _PARTICIPLE + r"|unspecified|unknown|"
+    r"undisclosed|no (?:\w+ ){0,3}(?:information|mention|details?|data|record|indication|reference|clause|"
+    r"provision|section|statement)|"
     r"none of the (?:\w+ ){0,3}" + _VERB + r"s?|"
     r"(?:does|do|did|is|are|was|were) not (?:\w+ )?" + _VERB + r"|"
     r"(?:doesn't|don't|didn't|isn't|aren't|wasn't|weren't) (?:\w+ )?" + _VERB + r"|"
+    r"(?:isn't|aren't|wasn't|weren't|hasn't|haven't|hadn't) (?:been )?(?:\w+ )?" + _PARTICIPLE + r"|"
     r"(?:don't|do not|doesn't|does not|didn't|did not) have (?:any |the |enough )?(?:information|details?|data|record)|"
     r"(?:cannot|can't|could not|couldn't|unable to|impossible to|not possible to) (?:\w+ )?(?:be )?"
-    r"(?:determin|state|say|tell|confirm|identify|know|answer)|"
+    r"(?:determin\w*|state|say|tell|confirm|identify|know|answer)|"
     r"(?:cannot|can't|could not|couldn't|unable to|did not|didn't) (?:\w+ )?find|"
-    r"(?:cannot|can't) be (?:\w+ )?(?:found|identified|determined|answered))\b", re.I)
+    r"(?:cannot|can't) be (?:\w+ )?(?:found|identified|determined|answered)|"
+    r"N/A|not applicable)(?!\w)", re.I)
+_APOSTROPHES = str.maketrans({c: "'" for c in "\u2019\u2018\u02bc"})
+_CLAUSE = re.compile(r";|\bbut\b|\bhowever\b", re.I)
 
 _NUMBERED = re.compile(r"^\s*\(?(\d{1,2})[.):]\s")
 _NUMBERED_REQUEST = re.compile(r"(?m)^\s*1[.)]\s")
@@ -79,14 +86,19 @@ def topics(questions: Sequence[str], gold: str = "") -> list[set[str]]:
 
 
 def says_not_given(fragment: str, request: str, topic: set[str], j: int, n_questions: int) -> bool:
-    """Does this fragment say that question j's answer is not given?"""
+    """Does this fragment say that question j's answer is not given? The abstention phrase and the topic
+    must stand in the same clause (split at semicolons, "but", "however"): "The report gives no details about
+    the delay; the carrier was Dralor Cargo." says nothing about the carrier (v1.2). A number that is not a question's
+    number ("3." in a request of two questions) falls back to the topic words (v1.2)."""
+    fragment = fragment.translate(_APOSTROPHES)
     if not ABSTAIN.search(fragment):
         return False
     m = _NUMBERED.match(fragment)
-    if m and _NUMBERED_REQUEST.search(request):
+    if m and _NUMBERED_REQUEST.search(request) and 1 <= int(m.group(1)) <= n_questions:
         return int(m.group(1)) - 1 == j
-    words = _stems(fragment)
-    return bool(words & topic) or (n_questions == 1 and not words)
+    clauses = [c for c in _CLAUSE.split(fragment) if ABSTAIN.search(c)]
+    words = set().union(*(_stems(c) for c in clauses))
+    return bool(words & topic) or (n_questions == 1 and not _stems(fragment))
 
 
 def abstains(response: str, item: Item) -> bool | None:

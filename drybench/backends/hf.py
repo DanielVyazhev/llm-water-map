@@ -62,6 +62,8 @@ class HFBackend(LMBackend):
         self.model = AutoModelForCausalLM.from_pretrained(
             model_name_or_path, trust_remote_code=trust_remote_code, **{dtype_kw: torch_dtype}
         ).to(self.device).eval()
+        self.revision = getattr(self.model.config, "_commit_hash", None)  # the hub commit the weights came from
+        self.dropped_generation_config = self._plain_generation_config()
         self.max_batch_tokens = max_batch_tokens
         cfg_len = getattr(self.model.config, "max_position_embeddings", None) or 4096
         self.max_length = max_length or min(int(cfg_len), 32768)
@@ -74,6 +76,25 @@ class HFBackend(LMBackend):
         self.prepend_bos = bool(prepend_bos)
         self.chat_template_kwargs = chat_template_kwargs or {}
         self._supports_keep = True
+        self._digit_ids: Any = None
+        self._warned_cut = False
+
+    def _plain_generation_config(self) -> dict:
+        """Replace the model's generation config by one with its special tokens only, so that generate() is plain
+        greedy decoding for every model: Qwen2.5-0.5B/1.5B-Instruct ship repetition_penalty 1.1 (7B: 1.05),
+        which transformers applies even without sampling (v1.2). Returns the settings that were dropped."""
+        from transformers import GenerationConfig
+
+        old = self.model.generation_config
+        tokens = ("bos_token_id", "eos_token_id", "pad_token_id", "decoder_start_token_id")
+        keep = {k: getattr(old, k, None) for k in tokens}
+        self.model.generation_config = GenerationConfig(**{k: v for k, v in keep.items() if v is not None})
+        return {k: v for k, v in old.to_diff_dict().items() if k not in tokens and k != "transformers_version"}
+
+    def describe(self) -> dict:
+        """What was loaded: name, hub commit, dtype, device, generation settings dropped from the model's config."""
+        return {"name": self.name, "revision": self.revision, "dtype": str(self.model.dtype).replace("torch.", ""),
+                "device": self.device, "dropped_generation_config": self.dropped_generation_config}
 
     # ------------------------------------------------------------------ tokenization
     def encode(self, text: str) -> list[int]:
@@ -143,11 +164,32 @@ class HFBackend(LMBackend):
         ctx = self._start_ids(context, ctx)
         overflow = len(ctx) + len(cont) - self.max_length
         if overflow > 0:
+            if not self._warned_cut:
+                import warnings
+
+                warnings.warn(f"{self.name}: a prompt of {len(ctx) + len(cont)} tokens is longer than "
+                              f"{self.max_length}; its start is cut off", stacklevel=2)
+                self._warned_cut = True
             ctx = ctx[overflow:]
         return ctx, cont, moved
 
+    def _digit_token_ids(self):
+        """Ids of the tokens whose text starts with a digit (no leading space): they continue a number."""
+        if self._digit_ids is None:
+            tok = self.tokenizer
+            ids = [i for i in range(len(tok)) if tok.decode([i])[:1].isdigit()]
+            self._digit_ids = self.torch.tensor(ids, dtype=self.torch.long)
+        return self._digit_ids
+
     # ------------------------------------------------------------------ interface
     def continuation_logprobs(self, requests: Sequence[tuple[str, str]]) -> np.ndarray:
+        return self._continuations(requests, terminated=False)
+
+    def terminated_logprobs(self, requests: Sequence[tuple[str, str]]) -> np.ndarray:
+        return self._continuations(requests, terminated=True)
+
+    def _continuations(self, requests: Sequence[tuple[str, str]], terminated: bool) -> np.ndarray:
+        """Sum of log p of each continuation; terminated: times p(the next token does not start with a digit)."""
         torch = self.torch
         enc = [self._prepare(c, k) for c, k in requests]
         out = np.zeros(len(requests))
@@ -166,6 +208,10 @@ class HFBackend(LMBackend):
                 sl = logits[b, n_keep - len(k) - 1: n_keep - 1]
                 lp = torch.log_softmax(sl, dim=-1)
                 out[i] = lp[torch.arange(len(k)), torch.tensor(k, device=lp.device)].sum().item()
+                if terminated:  # the position after the continuation (left padding: the last one)
+                    nxt = torch.log_softmax(logits[b, n_keep - 1], dim=-1)
+                    digit = torch.logsumexp(nxt[self._digit_token_ids().to(nxt.device)], dim=0).item()
+                    out[i] += float(np.log1p(-min(np.exp(digit), 1.0 - 1e-12)))
         return out
 
     def first_token_logmass(self, contexts: Sequence[str], strings: Sequence[str]) -> np.ndarray:
@@ -275,6 +321,19 @@ class HFBackend(LMBackend):
 
     def generate_batch(self, contexts: Sequence[str], max_new_tokens: int = 256,
                        temperature: float = 0.0, seed: int | None = None) -> list[str]:
+        return [g["text"] for g in self.generate_batch_info(contexts, max_new_tokens, temperature, seed)]
+
+    def _eos_ids(self) -> set[int]:
+        eos = self.model.generation_config.eos_token_id
+        ids = set(eos if isinstance(eos, (list, tuple)) else [eos] if eos is not None else [])
+        if self.tokenizer.eos_token_id is not None:
+            ids.add(self.tokenizer.eos_token_id)
+        return ids
+
+    def generate_batch_info(self, contexts: Sequence[str], max_new_tokens: int = 256,
+                            temperature: float = 0.0, seed: int | None = None) -> list[dict]:
+        """Per context: the text, the number of new tokens (up to and with the end token) and whether the
+        model ended it (False: cut at max_new_tokens)."""
         torch = self.torch
         seqs = [self._start_ids(c, self.encode(c)) for c in contexts]
         T = max(len(s) for s in seqs)
@@ -289,8 +348,13 @@ class HFBackend(LMBackend):
             kw.update(temperature=temperature, top_p=1.0, top_k=0)
             if seed is not None:
                 torch.manual_seed(seed)
-        else:
-            kw.update(temperature=None, top_p=None, top_k=None)
         with torch.inference_mode():
             out = self.model.generate(input_ids=ids.to(self.device), attention_mask=mask.to(self.device), **kw)
-        return [self.tokenizer.decode(o[T:], skip_special_tokens=True) for o in out]
+        eos = self._eos_ids()
+        res = []
+        for o in out:
+            new = o[T:].tolist()
+            end = next((i for i, t in enumerate(new) if t in eos), None)
+            res.append({"text": self.tokenizer.decode(new, skip_special_tokens=True),
+                        "n_tokens": len(new) if end is None else end + 1, "finished": end is not None})
+        return res

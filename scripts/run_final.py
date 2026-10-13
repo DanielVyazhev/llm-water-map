@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 """The confirmation run of the paper: one frozen version of the code, new items, new models, every check.
 
-    python scripts/run_final.py --run runs/final_v1 --dev-items runs/real_t4_n15/items.jsonl [settings]
+    python scripts/run_final.py --run runs/final_v1 \
+        --dev-items results/dev_v1.0/real/items.jsonl runs/real_t4_n15_v12/items.jsonl [settings]
+    python scripts/run_final.py --print-hash      # version and code hash for the registration
 
 Everything was designed and tuned on the development runs (the T4 runs: three models of 0.5–1.7B, synthetic
-items of seed 0, the real-text items in --dev-items). This run checks the results on what those runs did not
-see: synthetic items of another seed, real-text items built from other source texts (no paragraph, question,
-contract or labelled question of the development items), and larger models; the code is the version recorded
-in protocol.json at the first start (rerunning with another version stops, see docs/PROTOCOL.md).
+items of seed 0, the real-text items in --dev-items, every development run). This run checks the results on
+what those runs did not see: synthetic items of another seed, real-text items built from other source texts (no
+paragraph, MuSiQue question or step, or contract of the development items), and larger models; the code is the
+version recorded in protocol.json at the first start (rerunning with another version stops, see
+docs/PROTOCOL.md). Poddar et al. is not a suite of this run: the development human-label check used every
+question of it that could be an item.
 
 Steps (rerunning resumes):
   1. synthetic reports  → RUN/synthetic   (scripts/run_synthetic.py)
@@ -15,7 +19,9 @@ Steps (rerunning resumes):
   3. human-label samples → RUN/annotation: sample.jsonl / key.jsonl (item by item, both suites, no missing-fact
      items; every reader's filler map, and the judges and Selective Context on it) and abstain_sample.csv
      (answers to missing-fact items, for held-out labels of the abstention rule)
-  4. RUN.zip (everything) and RUN_annotation.zip (what the annotators need)
+  4. the confirmatory tests without the human labels → RUN/confirmatory.md (drybench confirm; with the labels:
+     drybench confirm --run RUN --labels ...)
+  5. RUN.zip (everything) and RUN_annotation.zip (what the annotators need)
 """
 
 from __future__ import annotations
@@ -45,19 +51,36 @@ DEFAULT_MODELS = [
 DEFAULT_READERS2 = ["phi3.5-mini=microsoft/Phi-3.5-mini-instruct", "phi-4=microsoft/phi-4"]
 DEFAULT_JUDGES = ["phi-4=microsoft/phi-4"]
 DEFAULT_SELECTIVE = ["qwen2.5-3b=Qwen/Qwen2.5-3B-Instruct"]
-PROTOCOL_KEYS = ("version", "code", "scoring", "seed", "filler_check_seed", "n_per_cell_synthetic", "n_per_cell_real",
-                 "reader", "readers2", "dev_items")
+# Poddar et al. is left out: every question usable as an item was used by the development human-label check
+DEFAULT_SUITES = ["squad2", "musique", "cuad"]
+PROTOCOL_KEYS = ("version", "code", "scoring", "signals", "seed", "filler_check_seed", "n_per_cell_synthetic",
+                 "n_per_cell_real", "reader", "readers2", "reader_items_per_cell", "models", "variants", "judges",
+                 "selective", "suites", "max_new_tokens", "dtype", "dev_items_sha256", "annotation", "abstain_n")
+# the code that runs: the package and the scripts of a run, the same files in the repository and in the Colab
+# notebook (scripts/make_colab.py ships them), so both give the same hash
+CODE_SCRIPTS = ("scripts/run_final.py", "scripts/run_real.py", "scripts/run_synthetic.py",
+                "scripts/pilot_validation.py")
+
+
+def code_files() -> list[Path]:
+    return sorted(list((REPO / "drybench").rglob("*.py")) + [REPO / f for f in CODE_SCRIPTS])
 
 
 def code_hash() -> str:
-    """sha1 of the package and scripts that run (drybench/**/*.py, scripts/*.py): the version string alone
-    would not notice a rebuilt package with other code."""
+    """sha1 of the package and the run scripts (code_files): the version string alone would not notice a
+    rebuilt package with other code."""
     import hashlib
 
     h = hashlib.sha1()
-    for f in sorted(list((REPO / "drybench").rglob("*.py")) + list((REPO / "scripts").glob("*.py"))):
+    for f in code_files():
         h.update(f.relative_to(REPO).as_posix().encode() + b"\0" + f.read_bytes() + b"\0")
     return h.hexdigest()[:16]
+
+
+def file_sha256(path: str | Path) -> str:
+    import hashlib
+
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
 def preflight(ids: list[str]) -> None:
@@ -77,8 +100,10 @@ def preflight(ids: list[str]) -> None:
                          "drop the model.")
 
 
-def protocol(out: Path, args: argparse.Namespace) -> dict:
-    """protocol.json: the frozen settings of the run, written at its first start and checked at every rerun."""
+def protocol(out: Path, args: argparse.Namespace, write: bool = True) -> dict:
+    """protocol.json: the frozen settings of the run, written at its first start and checked at every rerun.
+    A change allowed with --allow-protocol-change is applied and logged under "changes" (v1.2; before, the old
+    values stayed and nothing was logged)."""
     import drybench
 
     cur = {"version": drybench.__version__, "code": code_hash(), "scoring": drybench.SCORING_VERSION,
@@ -87,7 +112,10 @@ def protocol(out: Path, args: argparse.Namespace) -> dict:
            "n_per_cell_real": args.n_per_cell_real, "reader": args.reader, "readers2": rr.label_map(args.readers2),
            "reader_items_per_cell": args.reader_items_per_cell, "models": rr.model_map(args.models),
            "variants": args.variants, "judges": rr.label_map(args.judges),
-           "selective": rr.label_map(args.selective), "dev_items": [str(p) for p in args.dev_items],
+           "selective": rr.label_map(args.selective), "suites": sorted(args.suites),
+           "max_new_tokens": args.max_new_tokens, "dtype": args.dtype, "decoding": "plain greedy",
+           "dev_items": [str(p) for p in args.dev_items],
+           "dev_items_sha256": sorted(file_sha256(p) for p in args.dev_items),
            "annotation": {"sources": args.annotation_sources, "items_per_source": args.annotation_items,
                           "per_item": args.annotation_per_item}, "abstain_n": args.abstain_n,
            "started": time.strftime("%Y-%m-%d %H:%M:%S")}
@@ -99,8 +127,13 @@ def protocol(out: Path, args: argparse.Namespace) -> dict:
             raise SystemExit(f"{path} was started with other {', '.join(diff)} (package v{old.get('version')}, "
                              f"now v{cur['version']}). A confirmation run keeps its protocol: use the same package "
                              "and settings, or a new --run, or --allow-protocol-change (and report it).")
-        cur = {**old, "models": {**old.get("models", {}), **cur["models"]}}
-    path.write_text(json.dumps(cur, indent=1))
+        changes = list(old.get("changes") or [])
+        if diff:
+            changes.append({"at": cur["started"], "changed": {k: {"from": old.get(k), "to": cur.get(k)} for k in diff}})
+            print(f"PROTOCOL CHANGED ({', '.join(diff)}): logged in {path} under 'changes'; report it")
+        cur = {**cur, "started": old.get("started", cur["started"]), "changes": changes}
+    if write:
+        path.write_text(json.dumps(cur, indent=1))
     return cur
 
 
@@ -108,8 +141,8 @@ def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--run", default="runs/final_v1")
     ap.add_argument("--data", default=None, help="dataset downloads (default: RUN/../data)")
-    ap.add_argument("--dev-items", nargs="+", required=True,
-                    help="items.jsonl of the development runs on real texts: their source texts are left out")
+    ap.add_argument("--dev-items", nargs="+", default=None,
+                    help="items.jsonl of every development run on real texts: their source texts are left out")
     ap.add_argument("--models", nargs="+", default=DEFAULT_MODELS)
     ap.add_argument("--reader", default=rr.READER)
     ap.add_argument("--readers2", nargs="*", default=DEFAULT_READERS2, metavar="LABEL=ID")
@@ -121,7 +154,8 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--seed", type=int, default=1, help="items: the development runs used seed 0")
     ap.add_argument("--n-per-cell-synthetic", type=int, default=30)
     ap.add_argument("--n-per-cell-real", type=int, default=30)
-    ap.add_argument("--suites", nargs="+", default=["squad2", "musique", "cuad", "poddar"])
+    ap.add_argument("--suites", nargs="+", default=DEFAULT_SUITES,
+                    help="real-text suites (Poddar et al. is not held out: see docs/PROTOCOL.md)")
     ap.add_argument("--filler-check-n", type=int, default=5)
     ap.add_argument("--real-check-n", type=int, default=4)
     ap.add_argument("--dtype", default="bf16")
@@ -138,23 +172,34 @@ def main(argv: list[str] | None = None) -> None:
                     help="delete each evaluated model's download after use (needs ~70 GB instead of ~140 GB; models "
                          "are downloaded again for the second suite)")
     ap.add_argument("--allow-protocol-change", action="store_true")
+    ap.add_argument("--print-hash", action="store_true",
+                    help="print the package version and the code hash (for the registration) and stop")
     ap.add_argument("--allow-cpu", action="store_true")
     ap.add_argument("--backend", default="hf", choices=["hf", "mock"], help="mock: a smoke test without models")
     args = ap.parse_args(argv)
+    if not args.print_hash and not args.dev_items:
+        ap.error("--dev-items is required")
 
+    if args.print_hash:
+        import drybench
+
+        print(json.dumps({"version": drybench.__version__, "code": code_hash(),
+                          "files": [f.relative_to(REPO).as_posix() for f in code_files()]}, indent=1))
+        return
     t0 = time.time()
     out = Path(args.run)
-    out.mkdir(parents=True, exist_ok=True)
     missing = [p for p in args.dev_items if not Path(p).exists()]
     if missing:
         raise SystemExit("development items not found: " + ", ".join(missing))
+    out.mkdir(parents=True, exist_ok=True)
+    protocol(out, args, write=False)  # a rerun with other settings stops here, before any download
+    if args.backend == "hf":
+        preflight([v.split("=", 1)[1] for v in args.models + args.readers2 + args.judges + args.selective]
+                  + [args.reader])
     proto = protocol(out, args)
     rr.write_hardware(out)
     print(f"Confirmation run {out.resolve()} — package v{proto['version']} (code {proto['code']}, scoring "
           f"{proto['scoring']})")
-    if args.backend == "hf":
-        preflight([v.split("=", 1)[1] for v in args.models + args.readers2 + args.judges + args.selective]
-                  + [args.reader])
     subset = [s for s in args.reader_items_per_cell if s]
     shared = ["--models", *args.models, "--reader", args.reader, "--readers2", *args.readers2,
               "--variants", *args.variants, "--dtype", args.dtype, "--batch-size", args.batch_size,
@@ -175,10 +220,14 @@ def main(argv: list[str] | None = None) -> None:
         rr.run([sys.executable, REPO / "scripts" / "run_real.py", "--run", out / "real",
                 "--data", args.data or out.parent / "data", "--suites", *args.suites,
                 "--n-per-cell", args.n_per_cell_real, "--seed", args.seed, "--real-check-n", args.real_check_n,
-                "--filler-check-n", 0, "--exclude-items", *args.dev_items] + shared)
+                "--filler-check-n", 0, "--exclude-items", *args.dev_items, "--require-musique-full",
+                "--no-human-check"] + shared)
     if "annotation" not in args.skip:
         print("\n======== 3/3 samples for human labels ========")
         annotation(out, args)
+    if (out / "synthetic").exists() or (out / "real").exists():
+        print("\n======== confirmatory tests (the human-label tests wait for the labels) ========")
+        rr.run(rr.CLI + ["confirm", "--run", out])
     archive = shutil.make_archive(str(out), "zip", root_dir=out.parent, base_dir=out.name)
     ann = out / "annotation"
     if ann.exists():

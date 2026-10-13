@@ -89,6 +89,7 @@ def score_response(reader, backend, it, cond, n_filler, n_omit, delta, greedy):
         row[f"{mode}_kept"] = [s.kept for s in res.spans]
         if mode == "loo":
             row["loo_candidate"] = [s.candidate for s in res.spans]
+            row["loo_cost"] = [s.loo_cost for s in res.spans]
         ev = evaluate_filler_map(sim, [s.kept for s in res.spans], lengths) if res.status == "ok" else {}
         row.update({f"{mode}_{k}": v for k, v in ev.items() if k != "W_true"})
         row.update({f"{mode}_W": res.W, f"{mode}_status": res.status, f"{mode}_evals": res.n_evals})

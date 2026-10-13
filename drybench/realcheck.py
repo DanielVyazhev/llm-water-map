@@ -36,7 +36,7 @@ from drybench.realdata import _contains, _norm, cell_key
 from drybench.reader import Reader
 from drybench.segment import segment
 from drybench.simulate import SimResponse, evaluate_filler_map, true_filler_fraction, filler_check_metrics
-from drybench.types import Item, Span
+from drybench.types import Item, Span, append_jsonl, read_jsonl
 from drybench.filler import dry_score
 
 REAL_FILLER_TYPES = ("preamble", "restatement", "hedge", "generic", "elaboration", "unrequested", "summary",
@@ -96,11 +96,12 @@ def _content(text: str) -> set[str]:
     return {w for w in re.findall(r"[a-z0-9]+", text.lower()) if w not in EN_STOPWORDS and len(w) > 2}
 
 
-def fact_sentence(item: Item, probe, sents: Sequence[tuple[int, str]]) -> tuple[int | None, str]:
+def fact_sentence(item: Item, probe, sents: Sequence[tuple[int, str]], others: Sequence = ()) -> tuple[int | None, str]:
     """The document sentence that states the probe's answer: the one with the item's evidence
-    phrase for this fact (CUAD), else one with the answer in the exact case the reader is asked
-    for, then most words shared with the question, then the shortest; a constructed sentence when
-    the document has none."""
+    phrase for this fact (CUAD), else one that mentions no answer of the `others` (the other requested
+    facts; v1.2, so that one sentence does not seem to state two facts), else one with the answer in the
+    exact case the reader is asked for, then most words shared with the question, then the shortest; a
+    constructed sentence when the document has none (paragraph None)."""
     if NOT_STATED in probe.answers:
         q = probe.question
         return None, f"Not stated in the {_noun(item)}: {q[:1].lower() + q[1:]}"
@@ -109,12 +110,22 @@ def fact_sentence(item: Item, probe, sents: Sequence[tuple[int, str]]) -> tuple[
         return None, f"{probe.question} {probe.value or probe.answers[0]}."
     evidence = (item.meta.get("evidence") or {}).get(probe.fact_id, "")
     qw = _content(probe.question)
+    other_forms = [a for o in others if o.fact_id != probe.fact_id and NOT_STATED not in o.answers for a in o.answers]
 
     def rank(c):
         exact = any(re.search(r"(?<!\w)" + re.escape(a) + r"(?!\w)", c[1]) for a in probe.answers)
-        return (bool(evidence) and evidence.lower() in c[1].lower(), exact, len(qw & _content(c[1])), -len(c[1]))
+        clean = not _mentions_any(c[1], other_forms)
+        return (bool(evidence) and evidence.lower() in c[1].lower(), clean, exact, len(qw & _content(c[1])),
+                -len(c[1]))
 
     return max(cands, key=rank)
+
+
+def has_document_sentences(item: Item) -> bool:
+    """Every requested fact the source gives has a sentence of the document that states it (not a constructed
+    "Question? Answer." sentence, as for a Poddar et al. reference the passage does not contain)."""
+    sents = document_sentences(item.document)
+    return all(fact_sentence(item, p, sents)[0] is not None for p in item.required_probes if NOT_STATED not in p.answers)
 
 
 def _answer_kind(item: Item, probe) -> str:
@@ -182,21 +193,21 @@ def simulate_real(item: Item, filler: Sequence[str] = (), omit: Sequence[str] = 
     all_forms = [a for p in item.probes for a in p.answers if NOT_STATED not in p.answers]
     all_forms += list(item.meta.get("plausible_answers") or [])
 
-    facts: list[list] = []  # [text, paragraph, fact ids]
+    facts: list[list] = []  # [text, paragraph, fact ids it was chosen for, fact ids it mentions]
     for p in probes:
         if p.fact_id in omit:
             continue
-        pi, text = fact_sentence(item, p, sents)
+        pi, text = fact_sentence(item, p, sents, probes)
         same = next((f for f in facts if f[0] == text), None)
         if same:
             same[2].append(p.fact_id)
         else:
-            facts.append([text, pi, [p.fact_id]])
-    for f in facts:  # a sentence states every requested fact it mentions (an omitted one included)
+            facts.append([text, pi, [p.fact_id], []])
+    for f in facts:  # facts a sentence mentions besides its own: present (an omitted one cannot be left out)
         for p in probes:
             if p.fact_id not in f[2] and NOT_STATED not in p.answers and _mentions_any(f[0], p.answers):
-                f[2].append(p.fact_id)
-    present = [p.fact_id for p in probes if any(p.fact_id in f[2] for f in facts)]
+                f[3].append(p.fact_id)
+    present = [p.fact_id for p in probes if any(p.fact_id in f[2] + f[3] for f in facts)]
     fact_texts = {f[0] for f in facts}
     fact_paras = {f[1] for f in facts if f[1] is not None}
     free = [(pi, t) for pi, t in sents if t not in fact_texts and len(t.split()) >= 4
@@ -211,7 +222,9 @@ def simulate_real(item: Item, filler: Sequence[str] = (), omit: Sequence[str] = 
         return rng.choice(TEMPLATES[kind]).format(noun=noun, question=question)
 
     head: list[tuple[str, str, tuple]] = []
-    body: list[tuple[str, str, tuple]] = [(t, "fact", tuple(fids)) for t, _, fids in facts]
+    # the truth: a fact sentence states the facts it was chosen for (v1.2); a mention of another fact's answer
+    # ("VerticalNet, Inc., a Pennsylvania corporation") does not state it (up to v1.1 it did)
+    body: list[tuple[str, str, tuple]] = [(t, "fact", tuple(fids)) for t, _, fids, _ in facts]
     tail: list[tuple[str, str, tuple]] = []
     used: set[str] = set()
     for kind in filler:
@@ -324,9 +337,11 @@ def planted_check(reader: Reader, items: Sequence[Item], out_dir: str | Path, n_
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     pools = wrong_pool(items)
-    chosen = select_items(items, n_per_cell)
+    # v1.2: items whose facts the document does not state in a sentence of its own are left out (their fact
+    # sentence would be a constructed "Question? Answer.")
+    chosen = select_items([it for it in items if has_document_sentences(it)], n_per_cell)
     rows_path = out / "rows.jsonl"
-    rows = [json.loads(line) for line in rows_path.read_text().splitlines()] if rows_path.exists() else []
+    rows = list(read_jsonl(rows_path)) if rows_path.exists() else []
     done = {(r["item_id"], r["condition"]) for r in rows}
     length_fn = reader.backend.count_tokens
     todo = [(it, c) for it in chosen for c in conditions if (it.item_id, c) not in done]
@@ -359,8 +374,7 @@ def planted_check(reader: Reader, items: Sequence[Item], out_dir: str | Path, n_
                "stopword_share": stopword_share(sim.text)}
         row.update(_score_sim(reader, it, sim, length_fn))
         rows.append(row)
-        with rows_path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+        append_jsonl(rows_path, row)
         if not quiet and (n % 25 == 0 or n == len(todo)):
             print(f"planted {n}/{len(todo)} [{time.time() - t0:.0f}s]", file=sys.stderr, flush=True)
     summary = summarize_planted(rows)
@@ -397,9 +411,24 @@ def _false_wrong(rows: Sequence[dict]) -> dict:
     return {"filler_spans": filler, "labelled_wrong": wrong / filler if filler else float("nan")}
 
 
+def _recall_with_unscored(rows: Sequence[dict]) -> float:
+    """Planted filler deleted / all planted filler, counting the responses the reader reads nothing from (no
+    filler map) as deleting none of theirs."""
+    from drybench.simulate import _is_pure_filler
+
+    pure = gone = 0
+    for r in rows:
+        kept = r.get("loo_kept") if r.get("loo_status") == "ok" else None
+        for i, lab in enumerate(r["labels"]):
+            if _is_pure_filler(lab):
+                pure += 1
+                gone += bool(kept is not None and not kept[i])
+    return gone / pure if pure else float("nan")
+
+
 def summarize_planted(rows: Sequence[dict]) -> dict:
     ok = [r for r in rows if r.get("loo_status") == "ok"]
-    out: dict = {"n_responses": len(rows), "n_scored_ok": len(ok)}
+    out: dict = {"n_responses": len(rows), "n_scored_ok": len(ok), "recall_with_unscored": _recall_with_unscored(rows)}
     if not ok:
         return out
     out["overall"] = filler_check_metrics(ok, "loo")
@@ -413,6 +442,8 @@ def summarize_planted(rows: Sequence[dict]) -> dict:
         sub = [r for r in ok if r["source"] == src]
         pf = [r for r in prefix if r["source"] == src]
         out["by_source"][src] = {**filler_check_metrics(sub, "loo"), "wrong": _wrong_stats(sub),
+                                 "n_built": sum(r["source"] == src for r in rows),
+                                 "recall_with_unscored": _recall_with_unscored([r for r in rows if r["source"] == src]),
                                  "W_vs_true": _corr([r["loo_W"] for r in sub], [r["W_true"] for r in sub]),
                                  "prefix": filler_check_metrics(pf, "prefix") if pf else {"n_responses": 0}}
     out["wrong"] = _wrong_stats(ok)
@@ -454,56 +485,35 @@ def _binary(y_true: Sequence[bool], y_pred: Sequence[bool], weight: Sequence[flo
             "predicted_positive": pp}
 
 
-def own_answer(reader: Reader, item: Item, response: str, labels: Sequence[tuple[int, int, str]]) -> str | None:
-    """The answer the response itself gives: the reader's short reply to the question when it reads
-    only the fragments the annotators marked as the minimal answer (MINANS). None when the reader
-    replies 'unknown' or with words it did not copy from those fragments."""
-    mins = " ".join(response[a:b].strip() for a, b, lab in labels if lab == "MINANS").strip()
-    if not mins:
-        return None
-    ans = reader.answer(item.request, mins, item.probes[0].question)
-    low = ans.lower()
-    if not ans or low.startswith(("unknown", "not stated")) or low not in " ".join(mins.lower().split()):
-        return None
-    return ans
-
-
 def human_label_check(reader: Reader, cases: Sequence[dict], out_dir: str | Path, abs_tol: float = 0.5,
                       quiet: bool = False) -> dict:
-    """The filler map vs human span labels. The fact a response delivers is its own answer: the
-    reference answer's forms plus what the reader reads from the response's minimal-answer span
-    (annotators labelled minimal vs extra text whether or not the answer is right)."""
+    """The filler map vs human span labels, on the responses that state the reference answer (one of its
+    accepted forms). The annotators marked the minimal answer whether or not it was right, so a response with
+    another answer has no truth the filler map can match without being told where the answer is. Up to v1.1 the
+    reader was given the fragments labelled minimal answer to find such a response's own answer: the labels
+    then entered the method (v1.2 leaves those responses out and counts them)."""
     from drybench.poddar import fragment_labels
-    from drybench.realdata import text_answer_forms
-    from drybench.types import Probe
 
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     rows_path = out / "rows.jsonl"
-    rows = [json.loads(line) for line in rows_path.read_text().splitlines()] if rows_path.exists() else []
+    rows = list(read_jsonl(rows_path)) if rows_path.exists() else []
     done = {r["case"] for r in rows}
     todo = [c for c in cases if c["item"].item_id not in done]
+    no_reference = sum(1 for c in cases if not any(_contains(c["response"], f) for f in c["item"].probes[0].answers))
     t0 = time.time()
     for n, c in enumerate(todo, 1):
         it, response = c["item"], c["response"]
         spans = segment(response)
-        if not spans:
-            continue
         probe = it.probes[0]
-        ref_hit = any(_contains(response, f) for f in probe.answers)
-        own = own_answer(reader, it, response, c["labels"])
-        if own:
-            forms = text_answer_forms(list(probe.answers) + [own])
-            it = Item(it.item_id, it.document, it.request,
-                      [Probe(probe.question, forms, probe.fact_id, True, probe.value)], it.gold_minimal,
-                      it.knobs, it.meta)
+        if not spans or not any(_contains(response, f) for f in probe.answers):
+            continue  # no reference answer in the response: left out (counted in the summary)
         res = dry_score(reader, it, response, mode="loo", spans=spans, abs_tol=abs_tol)
         pf = dry_score(reader, it, response, mode="loo", spans=spans, abs_tol=abs_tol, with_kappa=False,
                        classify=False, loo_skip=False)
         rec = c["record"]
         row = {"case": it.item_id, "subset": rec["subset"], "model": rec["model"], "qid": rec["qid"],
-               "request": it.request, "answers": it.probes[0].answers, "own_answer": own,
-               "answer_source": "reference" if ref_hit else ("own answer" if own else "none"),
+               "request": it.request, "answers": it.probes[0].answers, "answer_source": "reference",
                "status": res.status, "info": res.info,
                "W": res.W, "W_filler": res.W_filler, "W_misleading": res.W_misleading, "tokens": res.tokens,
                "facts": res.facts, "texts": [s.text for s in spans], "chars": [len(s.text) for s in spans],
@@ -516,12 +526,11 @@ def human_label_check(reader: Reader, cases: Sequence[dict], out_dir: str | Path
                "yap_excess": yap_excess_chars(response, it.gold_minimal), "stopword_share": stopword_share(response),
                "added_answers": res.added_answers}
         rows.append(row)
-        with rows_path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+        append_jsonl(rows_path, row)
         if not quiet and (n % 25 == 0 or n == len(todo)):
             print(f"labelled {n}/{len(todo)} [{time.time() - t0:.0f}s]", file=sys.stderr, flush=True)
     summary = summarize_human(rows)
-    summary["config"] = {"abs_tol": abs_tol, "cases": len(cases)}
+    summary["config"] = {"abs_tol": abs_tol, "cases": len(cases), "without_reference_answer": no_reference}
     (out / "summary.json").write_text(json.dumps(summary, indent=1))
     return summary
 

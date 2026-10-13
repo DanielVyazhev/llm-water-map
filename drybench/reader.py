@@ -195,6 +195,18 @@ class Reader:
         line = (text.strip().splitlines() or [""])[0].strip()
         return line.strip("\"'“”‘’`*").rstrip(".").strip()
 
+    def reply_logprobs(self, requests: Sequence[tuple[str, str]]) -> np.ndarray:
+        """log p(the reply starts with each continuation). A continuation that ends with a digit must not go on
+        with another digit: "70" does not cover "700", "3" does not cover "30" (v1.2)."""
+        out = np.zeros(len(requests))
+        term = [i for i, (_, k) in enumerate(requests) if k[-1:].isdigit()]
+        plain = [i for i, (_, k) in enumerate(requests) if not k[-1:].isdigit()]
+        if plain:
+            out[plain] = self.backend.continuation_logprobs([requests[i] for i in plain])
+        if term:
+            out[term] = self.backend.terminated_logprobs([requests[i] for i in term])
+        return out
+
     def probe_logprobs(self, request: str, messages: Sequence[str],
                        probes: Sequence[Probe]) -> np.ndarray:
         """[n_messages, n_probes] matrix of log sum_alias p(alias | x, message, q)."""
@@ -212,7 +224,7 @@ class Reader:
                         reqs.append((ctx, cont))
                         index.append((mi, pj, key))
         if reqs:
-            lps = self.backend.continuation_logprobs(reqs)
+            lps = self.reply_logprobs(reqs)
             if len(self._lp_cache) + len(reqs) > self.cache_size:
                 self._lp_cache.clear()
             for (mi, pj, key), lp in zip(index, lps):

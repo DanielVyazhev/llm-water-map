@@ -8,7 +8,8 @@ H_ans is converted to a within-model percentile H_pct.
 alpha        mean W on easy items the model is sure about: k=1, answerable, unambiguous, 1 hop,
              H_pct <= 0.5 (alpha_n = number of such items)
 beta         OLS slope of W on H_pct, controlling for k
-beta_ctrl    same, also controlling for unanswerable / ambiguous / 2-hop / 3+-hop design knobs
+beta_ctrl    same, also controlling for unanswerable / ambiguous / 2-hop / 3+-hop / "explain" design knobs
+             (explain since v1.2: the knob that drives filler most)
 gamma        OLS slope of substance tokens (tokens_kept) on k, controlling for H_pct, on plain
              items (answerable, unambiguous, 1 hop), where k is exactly the number of facts asked
 gamma_filler OLS slope of filler tokens on k, same items and controls (ideal: ~0)
@@ -54,7 +55,9 @@ def _stats(d: pd.DataFrame) -> dict[str, float]:
         "beta_ctrl": ols_coef(W, {"H_pct": h, "k": k, "unans": (~ans).to_numpy(float),
                                   "amb": amb.to_numpy(float),
                                   "hop2": (d["hops"] == 2).to_numpy(float),
-                                  "hop3p": (d["hops"] >= 3).to_numpy(float)}, "H_pct"),
+                                  "hop3p": (d["hops"] >= 3).to_numpy(float),
+                                  "explain": (d["explain"].astype(bool).to_numpy(float) if "explain" in d
+                                              else np.zeros(len(d)))}, "H_pct"),
         "gamma": ols_coef(kept[plain], {"k": k[plain], "H_pct": h[plain]}, "k"),
         "gamma_filler": ols_coef(filler_tok[plain], {"k": k[plain], "H_pct": h[plain]}, "k"),
         "alpha_n": float(len(easy)),

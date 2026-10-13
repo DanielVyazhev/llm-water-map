@@ -5,3 +5,4 @@ runs/
 assets/
 results/pilot_v0_run1/
 results/*.log
+data/

@@ -238,20 +238,40 @@ def check_versions(out: Path, reader: str, reader2: str | dict | None) -> None:
 
 def write_hardware(out: Path) -> None:
     """GPU and library versions of every session that worked on the run (hardware.json: sessions)."""
+    import platform
+
+    info = {"python": platform.python_version()}
+    try:
+        got = subprocess.run([sys.executable, "-c", "import drybench; print(drybench.__version__)"],
+                             capture_output=True, text=True, env=ENV)
+        info["drybench"] = got.stdout.strip() or None
+    except OSError:
+        pass
     try:
         import torch
         import transformers
 
-        info = {"gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "cpu",
-                "torch": torch.__version__, "transformers": transformers.__version__}
+        info.update({"gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "cpu",
+                     "cuda": torch.version.cuda, "torch": torch.__version__,
+                     "transformers": transformers.__version__})
     except ImportError:
-        info = {"gpu": "cpu"}
+        info["gpu"] = "cpu"
     path = out / "hardware.json"
     old = json.loads(path.read_text()) if path.exists() else {}
     sessions = old.get("sessions") or ([old] if old else [])
     if not sessions or {k: v for k, v in sessions[-1].items() if k != "started"} != info:
         sessions.append({**info, "started": time.strftime("%Y-%m-%d %H:%M:%S")})
     path.write_text(json.dumps({"sessions": sessions}, indent=1))
+
+
+def sha256(path: Path) -> str:
+    import hashlib
+
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for block in iter(lambda: f.read(1 << 20), b""):
+            h.update(block)
+    return h.hexdigest()
 
 
 def subset_responses(items: Path, resp: Path, dest: Path, n_per_cell: int, cell_of) -> Path:
@@ -379,6 +399,9 @@ def main() -> None:
                     help="real items per cell for the planted-filler check of each reader (0 = skip)")
     ap.add_argument("--no-human-check", dest="human_check", action="store_false",
                     help="skip the comparison with Poddar et al.'s human span labels")
+    ap.add_argument("--require-musique-full", action="store_true",
+                    help="stop when MuSiQue-Full cannot be downloaded (without it the MuSiQue missing-fact cell is "
+                         "skipped); the confirmation run sets it")
     ap.add_argument("--allow-cpu", action="store_true")
     ap.add_argument("--backend", default="hf", choices=["hf", "mock"], help="mock: a smoke test without models")
     args = ap.parse_args()
@@ -417,9 +440,15 @@ def main() -> None:
         if diff:
             raise SystemExit(f"{out} was made with other item settings ({', '.join(diff)}); "
                              "use a new --run name or the old settings.")
+        moved = {k: (old["models"][k], v) for k, v in models.items() if old.get("models", {}).get(k) not in (None, v)}
+        if moved:
+            raise SystemExit(f"{out}: model labels already used for other models: "
+                             + "; ".join(f"{k} was {a}, now {b}" for k, (a, b) in moved.items())
+                             + " — use new labels or a new --run name.")
         cfg["models"] = {**old.get("models", {}), **models}
         if old.get("exclude_items", []) != cfg["exclude_items"] and old.get("exclude_items") is not None:
             raise SystemExit(f"{out} was made with other --exclude-items; use a new --run name or the old ones.")
+        cfg.update({k: old[k] for k in ("data", "musique_full") if k in old})  # recorded by the first session
     cfg_path.write_text(json.dumps(cfg, indent=1))
     write_hardware(out)
     check_versions(out, args.reader, extra)
@@ -435,6 +464,18 @@ def main() -> None:
         poddar = paths["poddar"][0] if "poddar" in paths else get_poddar(data)[0]
     for s, ps in paths.items():
         print(f"    {s}: {', '.join(str(p) for p in ps)}")
+    full = "musique" not in paths or any(p.name == "musique_full_v1.0_dev.jsonl" for p in paths["musique"])
+    if not full and args.require_musique_full:
+        raise SystemExit("MuSiQue-Full is needed (--require-musique-full): put musique_full_v1.0_dev.jsonl into "
+                         f"{data / 'musique'} and run again")
+    files = {str(p): sha256(p) for ps in paths.values() for p in ps}
+    if poddar is not None:
+        files[str(poddar)] = sha256(poddar)
+    cfg = json.loads(cfg_path.read_text())
+    if cfg.get("data") and cfg["data"] != files:
+        print("    note: the dataset files differ from those this run started with (pools already built are kept)")
+    cfg.update({"data": cfg.get("data") or files, "musique_full": full})
+    cfg_path.write_text(json.dumps(cfg, indent=1))
 
     print("\n[2/8] items: pool per suite, then the leakage filter")
     report = out / "filter_report.json"

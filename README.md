@@ -18,10 +18,13 @@ flowchart LR
 
 ## Status (October 2026)
 
-- Code v1.1.0 (package `drybench`). Answer matching also accepts the response's own wording of a gold answer.
+- Code v1.2.0 (package `drybench`): fixes after a review of v1.1.0 (answer matching, the deletion search keeps the
+  first statement of a fact, completeness, segmentation, plain greedy decoding, the truth of the checks, resumable
+  runs); [CHANGELOG.md](CHANGELOG.md).
 - Results: development runs on a Colab T4 (models up to 1.7B, readers Qwen2.5-3B and Phi-3.5-mini), scored by
-  v1.0.0; to be rescored with v1.1.0.
-- Next: rescoring, the confirmation run on an A100, human labels.
+  v1.0.0. Being redone with v1.2.0, with the LLM judge and Selective Context.
+- Next: registration of the protocol ([docs/PROTOCOL.md](docs/PROTOCOL.md)), the confirmation run on an A100,
+  human labels.
 
 ## Filler map vs simple metrics
 
@@ -29,7 +32,8 @@ flowchart LR
 
 Metric: pairwise accuracy. Take two responses from one dataset whose true filler shares differ by at least 20
 percentage points. A metric is right if it gives the response with more filler the higher score; a tie counts half.
-50% is a coin flip, 100% is always right. With a two-class truth this is ROC-AUC.
+50% is a coin flip, 100% is always right. With a two-class truth this is ROC-AUC. The confirmation run tests
+pairwise accuracy and Spearman's correlation with the true filler share ([docs/PROTOCOL.md](docs/PROTOCOL.md)).
 
 The responses have known filler. They consist of sentences that state the requested facts (templated on synthetic
 reports, taken from the source text on real texts) and planted filler: openers, closings, hedges, generic remarks,
@@ -41,9 +45,9 @@ statement, which counts as removable. Development runs, reader Qwen2.5-3B, v1.0.
 - Length works only where the fact sentences are short, so filler is what makes a response long: synthetic reports
   (median 32 characters) and Poddar et al. (83). On SQuAD 2.0, MuSiQue and CUAD (145–162) it is close to a coin
   flip (46–58%).
-- Per fragment (filler or wrong vs needed) the filler map's yes/no decisions have ROC-AUC 0.98 on synthetic reports
-  and 0.79–0.99 on real texts; for yes/no decisions this equals balanced accuracy. The simple metrics give one
-  number per response and have no per-fragment score.
+- Per fragment (filler or wrong vs needed), ranking fragments by the information lost when each is deleted alone
+  gives ROC-AUC 0.98 on synthetic reports and 0.90–1.00 on real texts. The simple metrics give one number per
+  response and have no per-fragment score.
 - Not in the chart: answers of 10 LLMs labelled by people (Poddar et al.). There length is right in 92% of pairs
   and the filler map in 88% (95% CI of the difference: −8.5 to −0.2 points). The human labels of the confirmation
   run decide it ([docs/results.md](docs/results.md)).
@@ -60,7 +64,7 @@ The chart is rebuilt by `python scripts/readme_figure.py`.
 | [docs/results.md](docs/results.md) | development runs: numbers, the v1.0.0 matching issue, open questions |
 | [docs/examples.md](docs/examples.md) | one scored response per suite and one per check |
 | [docs/running.md](docs/running.md) | install, Colab, GPU server, rescoring, inspecting a run |
-| [docs/PROTOCOL.md](docs/PROTOCOL.md) | confirmation run: what is frozen, what is tested |
+| [docs/PROTOCOL.md](docs/PROTOCOL.md) | confirmation run: what is frozen, the confirmatory tests, registration |
 | [docs/ANNOTATION.md](docs/ANNOTATION.md) | guide for annotators |
 | [CHANGELOG.md](CHANGELOG.md) | versions |
 | [results/dev_v1.0](results/dev_v1.0/README.md) | tables and raw outputs of the development runs |
@@ -77,11 +81,16 @@ results/      dev_v1.0: development runs; pilot: GPT-2 pilot; abstain_labels.jso
 docs/         documents above
 ```
 
+## License
+
+Code: MIT ([LICENSE](LICENSE)). Data in `results/`: the licenses of their sources
+([results/dev_v1.0](results/dev_v1.0/README.md#licenses)).
+
 ## Quick start
 
 ```bash
 pip install -e ".[hf,plot,dev]"
-python -m pytest -q          # 161 tests, no GPU
+python -m pytest -q          # 194 tests, no GPU
 ```
 
 Runs with real models need a GPU: [docs/running.md](docs/running.md).
