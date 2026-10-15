@@ -88,22 +88,26 @@ def notebook(cell: str) -> dict:
                 "source": src.splitlines(keepends=True)}
 
     restore = ("## Optional: restore a saved run\n"
-               "In a new Colab session, run this cell and pick the `.zip` that the Details cell downloaded "
-               "(e.g. `t4_n20_v12.zip`); it goes to Google Drive, and the main cell then reuses its responses "
-               "instead of generating them again.")
-    restore_code = ("# Restore a run folder saved by the Details cell (skip in the session that made it).\n"
+               "Only to continue a run saved earlier as a `.zip` by the Details cell (e.g. `t4_n20_v12.zip`): set "
+               "`RESTORE = True`, run this cell and pick the file; it goes to Google Drive, and the main cell then "
+               "reuses its responses. For a new run leave `RESTORE = False`: the cell does nothing.")
+    restore_code = ("# Restore a run folder saved by the Details cell. RESTORE = False: nothing happens (a new run).\n"
+                    "RESTORE = False  # True: upload a run's .zip saved earlier\n"
                     "TO_DRIVE = True  # False: into /content (lost when the runtime is recycled; set USE_DRIVE = False too)\n"
                     "import zipfile\n"
-                    "from pathlib import Path\n"
-                    "from google.colab import files\n\n"
-                    "if TO_DRIVE:\n"
-                    "    from google.colab import drive\n\n"
-                    "    drive.mount(\"/content/drive\")\n"
-                    "dest = Path(\"/content/drive/MyDrive/drybench_runs\" if TO_DRIVE else \"/content/drybench_runs\")\n"
-                    "dest.mkdir(parents=True, exist_ok=True)\n"
-                    "for name in files.upload():\n"
-                    "    zipfile.ZipFile(name).extractall(dest)\n"
-                    "    print(\"restored\", name, \"→\", dest)\n")
+                    "from pathlib import Path\n\n"
+                    "if not RESTORE:\n"
+                    "    print(\"Nothing to restore (RESTORE = False): run the next cell.\")\n"
+                    "else:\n"
+                    "    from google.colab import files\n\n"
+                    "    if TO_DRIVE:\n"
+                    "        from google.colab import drive\n\n"
+                    "        drive.mount(\"/content/drive\")\n"
+                    "    dest = Path(\"/content/drive/MyDrive/drybench_runs\" if TO_DRIVE else \"/content/drybench_runs\")\n"
+                    "    dest.mkdir(parents=True, exist_ok=True)\n"
+                    "    for name in files.upload():\n"
+                    "        zipfile.ZipFile(name).extractall(dest)\n"
+                    "        print(\"restored\", name, \"→\", dest)\n")
     cells = [md(intro), md(restore), code(restore_code), code(cell)]
     for name, text in EXTRA_CELLS:
         cells += [md(text), code((ROOT / "colab" / name).read_text())]
