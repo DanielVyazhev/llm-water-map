@@ -1,4 +1,4 @@
-# Protocol of the confirmation run (package v1.2.0)
+# Protocol of the confirmation run (package v1.2.1)
 
 ## Development and confirmation
 
@@ -14,11 +14,11 @@ flowchart LR
   `real_t4_n15` (SQuAD 2.0, MuSiQue, CUAD, Poddar et al.; 15 items per cell); models Qwen2.5-0.5B/1.5B-Instruct and
   SmolLM2-1.7B-Instruct; readers Qwen2.5-3B-Instruct and Phi-3.5-mini-instruct; Poddar et al.'s 189
   human-labelled responses; 600 missing-fact answers labelled while the abstention rule was built.
-- v1.2 (the same design, package v1.2.0 after review): `t4_n20_v12`, `real_t4_n15_v12` on a T4, then the LLM judge
+- v1.2 (the same design, package v1.2.1 after review): `t4_n20_v12`, `real_t4_n15_v12` on a T4, then the LLM judge
   (Phi-4) and Selective Context (Qwen2.5-3B) on both on an A100 (`colab/dev_baselines_a100.ipynb`). Its values of
   the confirmatory statistics go into this file before the confirmation run.
 
-**Confirmation run.** `colab/final_a100.ipynb` or `scripts/run_final.py`, package v1.2.0:
+**Confirmation run.** `colab/final_a100.ipynb` or `scripts/run_final.py`, package v1.2.1:
 - synthetic reports: new items (seed 1, 30 per cell, 450 items); planted-filler check T1 on items of seed 2027
   (development: 2026), 5 per cell;
 - real texts: SQuAD 2.0, MuSiQue (MuSiQue-Full required), CUAD; 30 items per cell, built only from source texts the
@@ -64,7 +64,7 @@ flowchart TD
 | tolerance of the filler map | τ = 0.5 nats, slack min(τ, I_j / 2), every delivered fact separately | `drybench.filler` |
 | deletion search | leave-one-out queue; a fragment that cannot go with the ones before it is skipped; then of two statements of the same fact the first full one stays and the later one goes | `drybench.filler` |
 | fragments | sentences and list lines; abbreviations and initials do not end a sentence | `drybench.segment` |
-| kinds of deleted fragments | wrong statement (p ≥ 0.5 on a wrong answer) before repeat (≥ half of a delivered fact's information) before uninformative | `drybench.filler` |
+| kinds of deleted fragments | wrong statement (p ≥ 0.5 on a wrong answer) before repeat (≥ half of a delivered fact's information) before uninformative; in synthetic reports a fragment whose every value is true is never wrong | `drybench.filler` |
 | completeness κ | per fact, the information delivered capped at the gold's | `drybench.filler` |
 | missing facts | lexical rule, clause by clause; missing-fact items are left out of the filler tables | `drybench.abstain` |
 | readers | chat template; the question about a missing fact per reader | `drybench.reader` |

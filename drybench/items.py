@@ -151,6 +151,12 @@ def answer_forms(attr: str, value: str) -> list[str]:
     elif attr == "departure_date":
         day, month = value.split()
         forms = [value] + ([f"{month} {day}"] if int(day) >= 10 else [])  # "July 2" would cover "July 20"
+    elif attr == "cargo" and " of " in value:
+        # v1.2.1: "glass panels" answers "what cargo" for "22 bales of glass panels" (up to v1.2.0 a reply without
+        # the quantity was a wrong answer, and a correct sentence was deleted as a wrong statement)
+        unit_goods = value.split(" ", 1)[1]
+        goods = value.split(" of ", 1)[1]
+        forms = [value, unit_goods, unit_goods[:1].upper() + unit_goods[1:], goods, goods[:1].upper() + goods[1:]]
     else:
         forms = [value]
     out: list[str] = []

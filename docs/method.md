@@ -154,7 +154,7 @@ flowchart TD
     X["Deleted fragment, read alone"] --> W{"p of a wrong answer ≥ 0.5,<br>and below 0.5 with no message?"}
     W -->|yes| E{"Excused?"}
     E -->|no| M["Wrong statement"]
-    E -->|yes| T{"Excuse is 'true statement'<br>and the fragment answers<br>question j itself?"}
+    E -->|yes| T{"Real texts: excuse 'true statement'<br>and the fragment answers<br>question j itself?"}
     T -->|yes| M
     T -->|no| D
     W -->|no| D{"Gives a delivered fact j at least<br>max(0.5, I_j(y) / 2) nats?"}
@@ -165,8 +165,10 @@ flowchart TD
 - Wrong answer: any reply except the accepted answers and non-answers ("unknown", "not…", an echo of the
   question's shipment id).
 - Excuses: no words beyond the request (a header such as "For shipment KJ-3299:"); synthetic reports: another
-  shipment (named, and not the requested one), or a true value next to its own attribute; real texts: a true
-  statement, i.e. 80% of its words occur in one sentence of the source.
+  shipment (named, and not the requested one), or every value the fragment names (names, dates, numbers, cargo,
+  causes) is a true value of the requested shipment next to its own attribute ("The home port of the carrier
+  that handled LF-1273 is Thiul Docks."; then it is never wrong, v1.2.1); real texts: a true statement, i.e. 80%
+  of its words occur in one sentence of the source.
 - "Answers question j itself": carries j's number in a numbered request, or at least 60% (and 2) of the content
   words of question j. A true sentence of the source can still be the wrong answer.
 

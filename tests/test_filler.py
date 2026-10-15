@@ -279,7 +279,7 @@ def test_misleading_excuse_rules():
     cue = cues[unrequested]
     assert misleading_excuse(f"For shipment {t['sid']}:", it) == "no new words"
     assert misleading_excuse(f"Shipment {other} was delayed by Brenn Lines.", it) == "other shipment"
-    assert misleading_excuse(cue.format(t[unrequested]), it) == "true statement"
+    assert misleading_excuse(cue.format(t[unrequested]), it) == "true values"
     # a true value under another attribute's name is an attribute swap: not excused
     assert misleading_excuse(f"The inspector was {t[unrequested]}.", it) is None
     assert misleading_excuse("The carrier was Blorp Lines.", it) is None
@@ -373,3 +373,76 @@ def test_a_span_that_also_names_the_target_is_not_about_another_shipment():
     other = SHIPMENT_ID_IN(" ".join(it.meta["distractors"]))[0]
     assert misleading_excuse(f"Shipment {other} was delayed by Brenn Lines.", it) == "other shipment"
     assert misleading_excuse(f"Shipments {other} and {t['sid']} were both delayed by Brenn Lines.", it) is None
+
+
+# ---------------------------------------------------------------- v1.2.1: synthetic reports
+
+def test_a_cargo_answer_without_its_quantity_is_accepted():
+    """'glass panels' answers 'what cargo' for '22 bales of glass panels' (v1.2.0: a wrong answer, so a correct
+    sentence was deleted as a wrong statement)."""
+    from drybench.items import answer_forms
+
+    forms = answer_forms("cargo", "22 bales of glass panels")
+    assert forms[0] == "22 bales of glass panels" and {"glass panels", "Glass panels", "bales of glass panels"} <= set(forms)
+    assert not any(a != b and b.startswith(a) for a in forms for b in forms)  # prefix-free
+    it = make_item(random.Random(3), "cg", k=2, d=0)
+    cargo = [p for p in it.probes if p.question.startswith("What cargo")]
+    if cargo:
+        assert len(cargo[0].answers) == 5
+
+
+def test_a_synthetic_span_whose_every_value_is_true_is_never_wrong():
+    """v1.2.1: 'The home port of the carrier that handled X is P.' read for the carrier question was a wrong
+    statement in v1.2.0 (it answered that question by its words); every value it names is true."""
+    from drybench.filler import misleading_excuse
+
+    it = make_item(random.Random(5), "hop", k=1, d=4, hops=2, explain=True)
+    t, home = it.meta["target"], it.meta["carrier_home"]
+    sid = t["sid"]
+    other = SHIPMENT_ID_IN(" ".join(it.meta["distractors"]))[0]
+    assert misleading_excuse(f"The home port of the carrier that handled shipment {sid} is {home}.", it) == "true values"
+    assert misleading_excuse(f"Therefore, {home} is the home port of the carrier that handled shipment {sid}.",
+                             it) == "true values"
+    # the same port given as the carrier: an attribute swap, the reader decides
+    assert misleading_excuse(f"The carrier that handled shipment {sid} is {home}.", it) is None
+    assert misleading_excuse(f"Shipment {sid} was handled by {t['carrier']}, based in {home}.", it) == "true values"
+    assert misleading_excuse(f"Shipment {other} was handled by {t['carrier']}.", it) == "other shipment"
+
+    it2 = make_item(random.Random(9), "pq", k=3, d=4)
+    t2 = it2.meta["target"]
+    stated = [a for a in ("origin", "destination", "departure_date", "cargo") if t2[a] in it2.document]
+    if "cargo" in stated:
+        goods = t2["cargo"].split(" of ", 1)[1]
+        assert misleading_excuse(f"The cargo for shipment {t2['sid']} was {goods}.", it2) == "true values"
+        n = int(t2["cargo"].split()[0])
+        wrong_n = t2["cargo"].replace(str(n), str(n + 1), 1)
+        assert misleading_excuse(f"The cargo for shipment {t2['sid']} was {wrong_n}.", it2) is None
+    if "departure_date" in stated:
+        day, month = t2["departure_date"].split()
+        other_day = f"{(int(day) % 28) + 1} {month}"
+        assert misleading_excuse(f"Shipment {t2['sid']} left on {t2['departure_date']}.", it2) == "true values"
+        assert misleading_excuse(f"Shipment {t2['sid']} left on {other_day}.", it2) is None
+    # a true value next to another attribute's word is not excused (an attribute swap)
+    if "destination" in stated:
+        assert misleading_excuse(f"The origin port of shipment {t2['sid']} was {t2['destination']}.", it2) is None
+    assert misleading_excuse("1. The carrier was Blorp Lines.", it2) is None  # names nothing the report has
+
+
+def test_the_first_statement_stays_when_the_reader_misreads_it(monkeypatch):
+    """The first-statement pass restores an earlier statement only if it is not a wrong statement; in a
+    synthetic report a statement whose every value is true is never wrong (v1.2.1), even when the reader,
+    reading it alone, gives a wrong answer to another question."""
+    import drybench.filler as F
+
+    it = make_item(random.Random(7), "first2", k=2, d=0)
+    a1, a2 = (p.answers[0] for p in it.required_probes)
+    texts = [f"It is {a1}.", f"It is {a2}.", "I hope this helps!", f"In summary: {a1}; {a2}."]
+    monkeypatch.setattr(F, "_states_wrong", lambda reader, request, texts, probes, other_mass=0.5:
+                        np.ones(len(texts), bool))  # the reader misreads every statement
+    monkeypatch.setattr(F, "misleading_excuse", lambda text, item: "true values")
+    reader = _chat_reader()
+    new = F.dry_score(reader, it, " ".join(texts), mode="loo")
+    assert [s.kept for s in new.spans] == [True, True, False, False]
+    spans = F.segment(" ".join(texts))
+    res = F.filler_map(reader, it.request, spans, it.required_probes, mode="loo")  # no item: not excused
+    assert [s.kept for s in res.spans] == [False, False, False, True]

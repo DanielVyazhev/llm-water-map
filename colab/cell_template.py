@@ -287,7 +287,7 @@ def main():
         if got.returncode:
             raise RuntimeError("prune-scores failed:\n" + got.stdout + got.stderr)
         res = json.loads(got.stdout.strip().splitlines()[-1])
-        if res["plan"] == "all":
+        if res["plan"] in ("all", "synthetic"):  # v1.2.1 ("synthetic"): the answer forms of synthetic items
             print(f"Scoring changed (v{old['scoring']} → v{new['scoring']}): updating answer forms of the "
                   "items, recomputing the reader checks and filler maps; responses and signals are reused.")
             if items.exists():

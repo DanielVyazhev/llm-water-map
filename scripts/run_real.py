@@ -195,10 +195,11 @@ def reader_label(model_id: str) -> str:
     return re.sub(r"-instruct$", "", model_id.rstrip("/").split("/")[-1].lower())
 
 
-def check_versions(out: Path, reader: str, reader2: str | dict | None) -> None:
+def check_versions(out: Path, reader: str, reader2: str | dict | None, seed: int | None = None) -> None:
     """Scoring or signals changed since this run was made: recompute them (every score, or only those
     the new version changed for that reader: drybench.rescore), keep the responses. reader2: the other
-    readers as {label: model id} (or one model id, labelled by reader_label)."""
+    readers as {label: model id} (or one model id, labelled by reader_label). seed: the item seed of a
+    synthetic run, whose items then take the current answer forms (`drybench items --update-probes`)."""
     extra = reader2 if isinstance(reader2, dict) else ({reader_label(reader2): reader2} if reader2 else {})
     got = subprocess.run([sys.executable, "-c", "import drybench, json; print(json.dumps("
                           "{'scoring': drybench.SCORING_VERSION, 'signals': drybench.SIGNALS_VERSION}))"],
@@ -221,10 +222,13 @@ def check_versions(out: Path, reader: str, reader2: str | dict | None) -> None:
             res = json.loads(got.stdout.strip().splitlines()[-1])
             plans[sub] = res["plan"]
             what = {"all": "every score", "missing": "scores of items with a missing fact",
+                    "synthetic": "scores of synthetic items and the synthetic planted-filler check",
                     "none": "nothing (this reader's scores did not change)"}[res["plan"]]
             print(f"    {sub.name}: rescoring {what}")
             for line in res["changes"]:
                 print(f"      {line}")
+        if seed is not None and plans.get(out) in ("all", "synthetic") and (out / "items.jsonl").exists():
+            run(CLI + ["items", "--out", out / "items.jsonl", "--update-probes", "--seed", seed])
         report = out / "filter_report.json"
         if plans.get(out) != "all" and report.exists():  # the leakage filter reads probabilities, not
             rep = json.loads(report.read_text())          # gains: a partial change leaves it as it is

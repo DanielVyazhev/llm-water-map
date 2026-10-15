@@ -99,8 +99,9 @@ flowchart TD
     R2 --> T
 ```
 
-v1.2.0 (scoring version 10) also changes SQuAD 2.0 items and decoding, so the development runs are made again under
-new names instead of rescored:
+v1.2.1 (scoring version 11) changes synthetic reports only: a run of v1.2.0 rescores the answers to synthetic items
+and the synthetic planted-filler check, and keeps its real-text scores. v1.2.0 (scoring version 10) also changed
+SQuAD 2.0 items and decoding, so the development runs are made again under new names instead of rescored:
 
 1. `colab/drybench_colab.ipynb`, `RUN_NAME = "t4_n20_v12"` (the default), then its second-reader cell.
 2. `colab/real_texts_colab.ipynb`, `RUN_NAME = "real_t4_n15_v12"` (the default).

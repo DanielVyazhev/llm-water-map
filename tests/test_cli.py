@@ -111,3 +111,29 @@ def test_resume_refuses_other_settings(tmp_path):
         main(score + ["--abs-tol", "2.0"])
     main(score)
     assert sum(1 for _ in read_jsonl(scored)) == len(srows)
+
+
+def test_resume_keeps_rows_a_partial_rescore_left_valid(tmp_path):
+    """v1.2.1: rows scored by version 10 stay for items version 11 did not change (not synthetic); a row of a
+    synthetic item scored by 10 is out of date and stops the step until prune-scores removes it."""
+    import pytest
+
+    items, resp, scored = tmp_path / "items.jsonl", tmp_path / "resp.jsonl", tmp_path / "scored.jsonl"
+    main(["items", "--out", str(items), "--n-per-cell", "1"])
+    its = list(read_jsonl(items))
+    for it in its[:5]:
+        it["knobs"]["source"] = "squad2"  # stands for a real-text item
+    items.write_text("".join(json.dumps(r) + "\n" for r in its))
+    main(["generate", "--items", str(items), "--out", str(resp), "--backend", "mock", "--model-name", "m1"])
+    score = ["score", "--items", str(items), "--responses", str(resp), "--out", str(scored), "--reader-backend", "mock"]
+    main(score)
+    rows = list(read_jsonl(scored))
+    real = {it["item_id"] for it in its[:5]}
+    old = [{**r, "settings": {**r["settings"], "scoring": "10"}} for r in rows if r["item_id"] in real]
+    scored.write_text("".join(json.dumps(r) + "\n" for r in old))
+    main(score)  # the synthetic items are scored again next to the kept rows of version 10
+    assert len(list(read_jsonl(scored))) == len(rows)
+    stale = [{**r, "settings": {**r["settings"], "scoring": "10"}} for r in rows if r["item_id"] not in real][:1]
+    scored.write_text("".join(json.dumps(r) + "\n" for r in old + stale))
+    with pytest.raises(SystemExit, match="out of date"):
+        main(score)

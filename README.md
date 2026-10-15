@@ -18,11 +18,11 @@ flowchart LR
 
 ## Status (October 2026)
 
-- Code v1.2.0 (package `drybench`): fixes after a review of v1.1.0 (answer matching, the deletion search keeps the
+- Code v1.2.1 (package `drybench`): fixes after a review of v1.1.0 (answer matching, the deletion search keeps the
   first statement of a fact, completeness, segmentation, plain greedy decoding, the truth of the checks, resumable
   runs); [CHANGELOG.md](CHANGELOG.md).
 - Results: development runs on a Colab T4 (models up to 1.7B, readers Qwen2.5-3B and Phi-3.5-mini), scored by
-  v1.0.0. Being redone with v1.2.0, with the LLM judge and Selective Context.
+  v1.0.0. Being redone with v1.2.1, with the LLM judge and Selective Context.
 - Next: the confirmation run on an A100 ([docs/PROTOCOL.md](docs/PROTOCOL.md)), human labels.
 
 ## Filler map vs simple metrics

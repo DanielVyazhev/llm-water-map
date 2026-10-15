@@ -114,10 +114,13 @@ def test_runs_scored_before_v1_2_are_rescored_in_full():
     from drybench import SCORING_VERSION
     from drybench.rescore import plan
 
-    assert SCORING_VERSION == "10"
+    assert SCORING_VERSION == "11"
     for reader in ("Qwen/Qwen2.5-3B-Instruct", "microsoft/Phi-3.5-mini-instruct", None):
         assert plan("8", "9", reader) == "all" and plan("7", "9", reader) == "all"
         assert plan("9", "10", reader) == "all" and plan("8", "10", reader) == "all"
+        # v1.2.1 changes synthetic reports only; from before v1.2.0 everything is redone
+        assert plan("10", "11", reader) == "synthetic" and plan("9", "11", reader) == "all"
+    assert plan("7", "11", "Qwen/Qwen2.5-3B-Instruct") == "all"
 
 
 # ---------------------------------------------------------------- after review: what must not be credited

@@ -100,7 +100,8 @@ also accepted. One item per question. The same data's 10 LLM responses with huma
 ## Accepted answers
 
 Gold texts plus light variants: without a leading article or preposition, capitalised, without thousands
-separators, digits ↔ number words; reduced to a prefix-free set. From v1.1.0 also the response's own wording
+separators, digits ↔ number words; reduced to a prefix-free set. Synthetic cargo also without its quantity
+("glass panels" for "22 bales of glass panels", v1.2.1). From v1.1.0 also the response's own wording
 ([method.md](method.md#accepted-answers-in-the-responses-own-words-v110)).
 
 ## Leakage filter

@@ -2,6 +2,21 @@
 
 A change of the scoring version makes a resumed run recompute its scores ([running](docs/running.md#rescoring)).
 
+## 1.2.1 (scoring version 11)
+
+Two faults the first v1.2 development run showed, both in synthetic reports. A run of 1.2.0 rescores the answers
+to synthetic items and the synthetic planted-filler check only (`drybench.rescore`: a partial plan); real-text
+scores stay.
+- A cargo answer without its quantity is accepted: "glass panels" for "22 bales of glass panels". In 1.2.0 the
+  reply was a wrong answer: the fact counted as not delivered and the correct sentence was deleted as a wrong
+  statement.
+- A synthetic-report fragment whose every value (names, dates, numbers, cargo, causes) is a true value of the
+  requested shipment next to its own attribute is never a wrong statement, also in the first-statement pass. In
+  1.2.0 "The home port of the carrier that handled LF-1273 is Thiul Docks." was wrong when the reader, reading it
+  alone, answered the carrier question with the port.
+- `drybench score` keeps rows of an older scoring version where the newer one did not change them, and stops on
+  rows it did change until `prune-scores` removes them.
+
 ## 1.2.0 (scoring version 10, signals version 3)
 
 Fixes after a review of 1.1.0. Every score is recomputed; the development runs are made again

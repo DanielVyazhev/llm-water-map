@@ -15,6 +15,8 @@ Deleted spans are then read one by one (chat readers) and split into
   uninformative  the reader learns nothing about any probe from it      -> filler
 so W_filler = W_uninformative + W_duplicate and W = W_filler + W_misleading. A wrong statement
 counts as wrong even when it also restates a fact (v1.2; the annotation guidelines: wrong first).
+In a synthetic report, where the records are known, a span whose every value is true is never
+wrong, even when the reader, reading it alone, answers another question with it (v1.2.1).
 
 Of two statements of the same fact the first one is kept and the later one deleted, when the
 tolerance allows either (v1.2, the guidelines: "the first full statement is Needed").
@@ -33,7 +35,7 @@ from typing import Callable, Sequence
 
 import numpy as np
 
-from drybench.items import ATTR_NAMES, answer_forms
+from drybench.items import ATTR_NAMES, DELAY_CAUSES, MATERIALS, MONTHS, SYLLABLES, answer_forms
 from drybench.reader import Reader
 from drybench.segment import join_spans, segment
 from drybench.types import Item, Probe, Span
@@ -134,12 +136,13 @@ def _states_wrong(reader: Reader, request: str, texts: Sequence[str], probes: Se
 
 def _keep_first_statements(reader: Reader, request: str, spans: Sequence[Span], probes: Sequence[Probe],
                            keep: list[bool], full: np.ndarray, abs_tol: float, feasible: Callable,
-                           movable: set[int] | None = None
+                           movable: set[int] | None = None, item: Item | None = None
                            ) -> tuple[list[tuple[list[int], int]], np.ndarray | None, int]:
     """Of two statements of a fact, keep the first (the annotation guidelines: later repeats are filler).
 
     Statements: deleted spans that alone give a delivered fact (at least max(abs_tol, I_j / 2), as a
-    duplicate) and are not wrong statements. For each kept span k, from the last one (`movable`: only these),
+    duplicate) and are not wrong statements (a synthetic-report span that misleading_excuse excuses, such as one
+    whose every value is true, is not wrong: v1.2.1). For each kept span k, from the last one (`movable`: only these),
     the statements before it are restored and k deleted; if that keeps every delivered fact within the
     tolerance, the restored statements that are not needed then are deleted again, the latest first, and
     the change stands. `keep` is updated in place. Returns the changes (restored spans, deleted span), the
@@ -154,6 +157,8 @@ def _keep_first_statements(reader: Reader, request: str, spans: Sequence[Span], 
     states = [i for r, i in enumerate(removed) if np.any(delivered & (alone[r] >= np.maximum(abs_tol, 0.5 * full)))]
     if states:
         wrong = _states_wrong(reader, request, [spans[i].text for i in states], probes)
+        if item is not None and item.knobs.get("source", "synthetic") == "synthetic":
+            wrong = [bool(w) and misleading_excuse(spans[i].text, item) is None for i, w in zip(states, wrong)]
         states = [i for i, w in zip(states, wrong) if not w]
 
     def read(mask: list[bool]) -> np.ndarray:
@@ -200,6 +205,7 @@ def filler_map(
     tie_tol: float = 1e-3,
     loo_skip: bool = True,
     keep_first: bool = True,
+    item: Item | None = None,
 ) -> DryResult:
     """Compute I(y), W and the per-span filler map for a pre-segmented message.
 
@@ -217,7 +223,8 @@ def filler_map(
     first round and deletes a subset of the same spans.
 
     keep_first (v1.2): afterwards, of two statements of the same fact the first is kept
-    (_keep_first_statements); False: the search's choice stands (v1.1 and before).
+    (_keep_first_statements); False: the search's choice stands (v1.1 and before). item: the excuses of a
+    synthetic report apply there (dry_score passes it).
 
     A response that delivers less than min_info nats over its delivered facts (sum of max(I_j, 0)) delivers
     nothing: status 'no_signal', no map. Up to v1.1 the signed sum decided, so a wrong statement about one
@@ -305,7 +312,7 @@ def filler_map(
     if keep_first and constraint == "per_probe":
         movable = {i for i, sr in enumerate(res_spans) if sr.candidate} if mode == "loo" else None
         changes, pp_last, reads = _keep_first_statements(reader, request, spans, probes, keep, per_probe,
-                                                         abs_tol, feasible, movable)
+                                                         abs_tol, feasible, movable, item)
         n_evals += reads
         if changes:
             rank = max((sr.removal_rank for sr in res_spans if sr.removal_rank is not None), default=-1) + 1
@@ -372,10 +379,7 @@ def _true_values(item: Item) -> list[tuple[str, list[str]]]:
         for attr in ATTR_NAMES if rec else ():
             value = rec.get(attr)
             if value and value in item.document:
-                forms = answer_forms(attr, value)
-                if attr == "cargo" and " of " in value:  # "52 crates of glass panels" -> "glass panels"
-                    forms = forms + [value.split(" of ", 1)[1]]
-                out.append((attr, forms))
+                out.append((attr, answer_forms(attr, value)))  # cargo: also "glass panels" (v1.2.1)
     if item.meta.get("carrier_home"):
         out.append(("carrier_home", [item.meta["carrier_home"]]))
     return out
@@ -383,6 +387,60 @@ def _true_values(item: Item) -> list[tuple[str, list[str]]]:
 
 def _mentions(text: str, form: str) -> bool:
     return re.search(r"(?<![\w-])" + re.escape(form.lower()) + r"(?![\w-])", text) is not None
+
+
+_MONTH = "|".join(MONTHS)
+_SYN_DATE = re.compile(rf"\b\d{{1,2}}(?:st|nd|rd|th)?\s+(?:of\s+)?(?:{_MONTH})\b|\b(?:{_MONTH})\s+\d{{1,2}}(?:st|nd|rd|th)?\b")
+_SYN_VOCAB = re.compile(r"\b(?:" + "|".join(sorted({re.escape(m) for m in MATERIALS}
+                                                    | {re.escape(c[2:] if c.startswith("a ") else c)
+                                                       for c in DELAY_CAUSES}, key=len, reverse=True))
+                        + r")\b", re.I)
+_ENUMERATOR = re.compile(r"^\s*[-*•]?\s*\(?\d{1,2}[.):]\s")
+
+
+@lru_cache(maxsize=8192)
+def _generated_name(word: str) -> bool:
+    """A word the synthetic generator's namer makes: a capitalised run of two or more of its syllables."""
+    w = word.lower()
+    if not word[:1].isupper() or len(w) < 4:
+        return False
+    ok = [0] + [-1] * len(w)  # ok[i]: syllables in a segmentation of w[:i] (-1: none)
+    for i in range(1, len(w) + 1):
+        for syl in SYLLABLES:
+            j = i - len(syl)
+            if j >= 0 and ok[j] >= 0 and w[j:i] == syl:
+                ok[i] = max(ok[i], ok[j] + 1)
+    return ok[len(w)] >= 2
+
+
+def _synthetic_value_spans(text: str) -> list[tuple[int, int]]:
+    """Where a synthetic-report span names a value: generated names (ports, carriers, inspectors), dates,
+    numbers (not shipment ids, dates or list numbers), cargo materials and causes of delay."""
+    out = [m.span() for m in _SYN_DATE.finditer(text)] + [m.span() for m in _SYN_VOCAB.finditer(text)]
+    out += [m.span() for m in re.finditer(r"[A-Za-z]+", text) if _generated_name(m.group(0))]
+    masked = SHIPMENT_ID.sub(lambda m: " " * len(m.group(0)), text)
+    masked = _SYN_DATE.sub(lambda m: " " * len(m.group(0)), masked)
+    enum = _ENUMERATOR.match(masked)
+    if enum:
+        masked = " " * enum.end() + masked[enum.end():]
+    out += [m.span() for m in re.finditer(r"\b\d+\b", masked)]
+    return out
+
+
+def _only_true_values(text: str, item: Item) -> bool:
+    """Every value a synthetic-report span names is a true value of the requested shipment (or the carrier's
+    home port) said with its own attribute ("The home port of the carrier that handled LF-1273 is Thiul
+    Docks.", "The cargo was glass panels."), and it names at least one."""
+    values = _synthetic_value_spans(text)
+    if not values:
+        return False
+    low = text.lower()
+    true = []
+    for attr, forms in _true_values(item):
+        if re.search(ATTR_CUES[attr], low):
+            for f in forms:
+                true += [m.span() for m in re.finditer(r"(?<![\w-])" + re.escape(f.lower()) + r"(?![\w-])", low)]
+    return all(any(a <= s and e <= b for a, b in true) for s, e in values)
 
 
 @lru_cache(maxsize=4096)
@@ -401,12 +459,14 @@ def misleading_excuse(text: str, item: Item) -> str | None:
 
     The reader reads the span alone and may misattribute what it says; three patterns are not
     errors of the response: a span with no words beyond the request (a header "For shipment
-    KJ-3299:"), a span about another shipment (a correctly attributed distractor), and a true
-    value of the requested shipment next to its own attribute ("It was inspected by X" when the
-    inspector was not requested). Real-text items have no records to check against, so there a
-    true statement is one whose words (80% of them, the request's words included) occur in one
-    sentence of the document: "The law of New Jersey governs this agreement" is not excused by
-    "a New Jersey corporation" (v0.7.0 counted only the words new to the request and excused it)."""
+    KJ-3299:"), a span about another shipment (a correctly attributed distractor), and, in a
+    synthetic report, a span whose every value is a true value of the requested shipment next to
+    its own attribute ("true values": "It was inspected by X" when the inspector was not requested;
+    final, v1.2.1). Real-text items have no records to check against, so there a true statement is
+    one whose words (80% of them, the request's words included) occur in one sentence of the
+    document ("true statement"; it is still wrong when it answers a requested question itself):
+    "The law of New Jersey governs this agreement" is not excused by "a New Jersey corporation"
+    (v0.7.0 counted only the words new to the request and excused it)."""
     request_words = {w.lower() for w in WORD.findall(item.request)}
     words = {w.lower() for w in WORD.findall(text)} - FUNCTION_WORDS
     if not words - request_words:
@@ -417,11 +477,11 @@ def misleading_excuse(text: str, item: Item) -> str | None:
     named = set(SHIPMENT_ID.findall(text))
     if named - own and not named & own:  # about another shipment only (v1.2: not when it also names the target)
         return "other shipment"
-    low = text.lower()
-    for attr, forms in _true_values(item):
-        if any(_mentions(low, f) for f in forms) and re.search(ATTR_CUES[attr], low):
-            return "true statement"
-    return None
+    # v1.2.1: the records are known, so a span whose every value is true is never wrong, even where the reader,
+    # reading it alone, answers another question with it ("the home port of the carrier that handled X is P"
+    # read as the carrier). Up to v1.2.0 one true value excused a span unless it answered a question itself,
+    # and then the reader's answer decided.
+    return "true values" if _only_true_values(text, item) else None
 
 
 _NUMBERED = re.compile(r"^\s*\(?(\d{1,2})[.):]\s")
@@ -460,9 +520,10 @@ def classify_removed(reader: Reader, request: str, spans: Sequence[Span], probes
     Each deleted span is read on its own:
       misleading  the reader puts >= other_mass on answers that are neither gold nor an absence
                   reply ('unknown', 'not stated', ...), while with an empty message it does not,
-                  and the span is not excused by misleading_excuse (needs `item`); being a true
-                  statement of the document is no excuse for a span that answers that question
-                  itself (answer_attempts): a true sentence can be the wrong answer
+                  and the span is not excused by misleading_excuse (needs `item`); on real texts,
+                  being a true statement of the document is no excuse for a span that answers that
+                  question itself (answer_attempts): a true sentence can be the wrong answer; in a
+                  synthetic report a span whose every value is true is never wrong (v1.2.1)
       duplicate   otherwise, I_j(span) >= max(abs_tol, dup_frac * I_j(y)) for a probe the response delivers
       uninformative  otherwise
     Up to v1.1 a duplicate was never misleading, so a summary with a wrong value counted as filler.
@@ -551,7 +612,7 @@ def dry_score(
     probes = item.required_probes
     res = filler_map(reader, item.request, spans, probes, delta=delta, mode=mode,
                     length_fn=length_fn, min_info=min_info, constraint=constraint, abs_tol=abs_tol,
-                    loo_skip=loo_skip, keep_first=keep_first)
+                    loo_skip=loo_skip, keep_first=keep_first, item=item)
     res.added_answers = added
     if classify and res.status == "ok":
         classify_removed(reader, item.request, spans, probes, res, item=item, own_wording=own_wording)

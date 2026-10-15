@@ -184,6 +184,7 @@ def main():
             raise RuntimeError("prune-scores failed:\n" + got.stdout + got.stderr)
         res = json.loads(got.stdout.strip().splitlines()[-1])
         what = {"all": "every response", "missing": "the answers to items with a missing fact",
+                "synthetic": "the answers to synthetic items and the planted-filler check",
                 "none": "nothing (this reader's scores did not change)"}[res["plan"]]
         print(f"Scoring changed since the last second-reader run (v{old_v} → v{version}): rescoring {what}.")
         for line in res["changes"]:

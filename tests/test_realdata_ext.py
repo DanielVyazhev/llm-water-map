@@ -357,15 +357,14 @@ def test_runner_on_four_suites_and_report(cuad_file, poddar_file, tmp_path):
     again = [json.loads(x)["item_id"] for x in (run / "items.jsonl").read_text().splitlines()]
     assert dropped["item_id"] in again and set(x["item_id"] for x in items) <= set(again)
     assert len((run / "responses.jsonl").read_text().splitlines()) == n_resp
-    # a run scored by the version before: v1.1.0 changed every score (the response's own wording of a fact is
-    # accepted), so both readers rescore every response; the responses are kept and the filter is re-checked
+    # a run scored by version 9: v1.2.0 changed every score, so both readers rescore every response; the
+    # responses are kept and the filter is re-checked
     import drybench
 
     n_scored = {sub: len((sub / "scored.jsonl").read_text().splitlines()) for sub in (run, run / "reader2_mock2")}
-    (run / "versions.json").write_text(json.dumps({"scoring": str(int(drybench.SCORING_VERSION) - 1),
-                                                   "signals": drybench.SIGNALS_VERSION}))
+    (run / "versions.json").write_text(json.dumps({"scoring": "9", "signals": drybench.SIGNALS_VERSION}))
     rep = json.loads((run / "filter_report.json").read_text())
-    (run / "filter_report.json").write_text(json.dumps({**rep, "scoring": str(int(drybench.SCORING_VERSION) - 1)}))
+    (run / "filter_report.json").write_text(json.dumps({**rep, "scoring": "9"}))
     out = subprocess.run([str(c) for c in cmd], capture_output=True, text=True, timeout=600)
     assert out.returncode == 0, out.stdout[-3000:] + out.stderr[-3000:]
     assert out.stdout.count("rescoring every score") == 2  # both readers
@@ -375,6 +374,20 @@ def test_runner_on_four_suites_and_report(cuad_file, poddar_file, tmp_path):
         assert len((sub / "scored.jsonl").read_text().splitlines()) == n
         assert (sub / "filler_check_real" / "summary.json").exists() and (sub / "report").exists()
     assert "## R3." in (run / "tables_real.md").read_text()
+    # scored by 10: v1.2.1 changed synthetic reports only; the real-text scores stay (rows of version 10 next to
+    # new ones), the synthetic planted-filler check is made again
+    for sub in n_scored:
+        rows = [json.loads(x) for x in (sub / "scored.jsonl").read_text().splitlines()]
+        (sub / "scored.jsonl").write_text("".join(json.dumps({**r, "settings": {**r["settings"], "scoring": "10"}})
+                                                  + "\n" for r in rows))
+    (run / "versions.json").write_text(json.dumps({"scoring": "10", "signals": drybench.SIGNALS_VERSION}))
+    out = subprocess.run([str(c) for c in cmd], capture_output=True, text=True, timeout=600)
+    assert out.returncode == 0, out.stdout[-3000:] + out.stderr[-3000:]
+    assert out.stdout.count("rescoring scores of synthetic items") == 2
+    for sub, n in n_scored.items():
+        rows = [json.loads(x) for x in (sub / "scored.jsonl").read_text().splitlines()]
+        assert len(rows) == n and {r["settings"]["scoring"] for r in rows} == {"10"}
+        assert (sub / "filler_check" / "summary.json").exists()
 
 
 def test_generation_halves_a_batch_on_out_of_memory():

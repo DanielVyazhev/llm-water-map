@@ -95,7 +95,7 @@ def main(argv: list[str] | None = None) -> None:
         cfg["models"] = {**old.get("models", {}), **models}
     cfg_path.write_text(json.dumps(cfg, indent=1))
     rr.write_hardware(out)
-    rr.check_versions(out, args.reader, extra)
+    rr.check_versions(out, args.reader, extra, seed=args.seed)
     items, resp, signals = out / "items.jsonl", out / "responses.jsonl", out / "signals.jsonl"
     template = ["--chat-template-kwargs", json.dumps({"enable_thinking": False})] if args.no_thinking else []
     common = ["--reader-backend", args.backend, "--reader-dtype", dtype,

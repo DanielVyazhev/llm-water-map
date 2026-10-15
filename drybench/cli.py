@@ -253,6 +253,23 @@ def cmd_generate(args: argparse.Namespace) -> None:
         print(f"{label}: {cut} of {len(todo)} responses cut at {args.max_new_tokens} new tokens", file=sys.stderr)
 
 
+def _check_scoring(path: str, items: dict, reader: str | None) -> None:
+    """Rows scored by another scoring version may stay only where that version's score is still valid
+    (drybench.rescore.stale): a partial rescore (prune-scores) keeps those and removes the others."""
+    from drybench import SCORING_VERSION
+    from drybench.rescore import stale
+
+    if not Path(path).exists():
+        return
+    bad = [r for r in read_jsonl(path) if (r.get("settings") or {}).get("scoring") not in (None, SCORING_VERSION)
+           and r.get("item_id") in items and stale(r["settings"]["scoring"], items[r["item_id"]], reader)]
+    if bad:
+        v = bad[0]["settings"]["scoring"]
+        raise SystemExit(f"{path}: {len(bad)} rows were scored by scoring version {v} and are out of date (e.g. "
+                         f"{bad[0]['item_id']}): run `drybench prune-scores --from {v}` on the folder first, or "
+                         "write to a new file")
+
+
 def _score_settings(args: argparse.Namespace) -> dict:
     from drybench import SCORING_VERSION
 
@@ -271,10 +288,12 @@ def cmd_score(args: argparse.Namespace) -> None:
         print("score: nothing to do", file=sys.stderr)
         return
     settings = _score_settings(args)
-    _check_settings(args.out, {}, "settings", settings, "scored rows")
+    same = {k: v for k, v in settings.items() if k != "scoring"}  # the version: _check_scoring
+    _check_settings(args.out, {}, "settings", same, "scored rows")
+    _check_scoring(args.out, items, args.reader)
     reader = Reader.for_backend(_make(args, "reader"))
-    settings = {**settings, "revision": reader.backend.describe().get("revision")}
-    _check_settings(args.out, {}, "settings", settings, "scored rows")
+    same = {**same, "revision": reader.backend.describe().get("revision")}
+    _check_settings(args.out, {}, "settings", same, "scored rows")
     device = _device_name(reader.backend)
     for n, r in enumerate(rows, 1):
         t0 = time.perf_counter()

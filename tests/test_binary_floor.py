@@ -130,14 +130,27 @@ def test_run_real_rescores_per_reader(tmp_path):
     r2 = tmp_path / "reader2_phi-3.5-mini"
     r2.mkdir()
     (r2 / "scored.jsonl").write_text((tmp_path / "scored.jsonl").read_text())
-    (tmp_path / "versions.json").write_text(json.dumps({"scoring": str(int(drybench.SCORING_VERSION) - 1),
-                                                        "signals": drybench.SIGNALS_VERSION}))
-    (tmp_path / "filter_report.json").write_text(json.dumps({"scoring": str(int(drybench.SCORING_VERSION) - 1)}))
+    (tmp_path / "versions.json").write_text(json.dumps({"scoring": "9", "signals": drybench.SIGNALS_VERSION}))
+    (tmp_path / "filter_report.json").write_text(json.dumps({"scoring": "9"}))
     run_real.check_versions(tmp_path, "Qwen/Qwen2.5-3B-Instruct", "microsoft/Phi-3.5-mini-instruct")
-    # the step from the version before is a full change (v1.1.0: the response's own wording of a fact is
-    # accepted): every reader's scores go, and the leakage filter is checked again (its report keeps the old
-    # version); the partial rescore of 7 -> 8 is tested above with explicit versions
+    # from 9 the change is full (v1.2.0 changed matching and the search): every reader's scores go, and the
+    # leakage filter is checked again (its report keeps the old version); partial plans are tested above
     assert not (tmp_path / "scored.jsonl").exists() and not (r2 / "scored.jsonl").exists()
-    old = str(int(drybench.SCORING_VERSION) - 1)
-    assert json.loads((tmp_path / "filter_report.json").read_text())["scoring"] == old
+    assert json.loads((tmp_path / "filter_report.json").read_text())["scoring"] == "9"
     assert json.loads((tmp_path / "versions.json").read_text())["scoring"] == drybench.SCORING_VERSION
+
+
+def test_a_synthetic_only_change_rescores_synthetic_items_only(tmp_path):
+    """v1.2.1 (scoring 11) changes synthetic reports only: a real-text run keeps its scores of real items and
+    redoes its synthetic planted-filler check."""
+    items, _ = _folder(tmp_path)
+    real = {it.item_id for it in items[::2]}
+    for it in items:
+        if it.item_id in real:
+            it.knobs["source"] = "squad2"
+    (tmp_path / "items.jsonl").write_text("".join(json.dumps(it.to_dict()) + "\n" for it in items))
+    log = prune(tmp_path, tmp_path / "items.jsonl", "synthetic")
+    left = {json.loads(x)["item_id"] for x in (tmp_path / "scored.jsonl").read_text().splitlines()}
+    assert left == real and not (tmp_path / "filler_check").exists()
+    assert (tmp_path / "human_check" / "summary.json").exists() and not (tmp_path / "reader_check.json").exists()
+    assert any("rows of synthetic items removed" in line for line in log)
