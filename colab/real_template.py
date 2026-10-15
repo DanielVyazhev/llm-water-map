@@ -4,7 +4,7 @@
 #    N_PER_CELL = 10 takes about 2 hours.
 # Rerunning the cell resumes where it stopped. With USE_DRIVE = True the run lives in Google Drive,
 # so a disconnected session loses nothing: reconnect, rerun this cell.
-# The package (v__VERSION__) is embedded at the bottom of the cell; nothing to upload.
+# The package (v__VERSION__) is embedded as PKG_B64 (notebook: the hidden cell "Package"); nothing to upload.
 
 # ---- settings ----
 N_PER_CELL = 15                      # items per cell after the leakage filter (21 cells)
@@ -55,6 +55,8 @@ def run(args):
 
 
 def install():
+    if "PKG_B64" not in globals():
+        raise SystemExit('Run the cell "Package" first (its code is hidden), then this cell.')
     digest = hashlib.sha1(PKG_B64.encode()).hexdigest()[:10]
     base = Path("/content") if Path("/content").exists() else Path.cwd()
     pkg = (base / f"drybench_pkg_{digest}").resolve()

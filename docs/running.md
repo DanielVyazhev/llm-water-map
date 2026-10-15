@@ -28,7 +28,9 @@ limit; reader, scoring version and options): a resumed step with other settings 
 
 ## Colab
 
-The notebooks embed the package; nothing to upload. `python scripts/make_colab.py` rebuilds them after code changes.
+The notebooks embed the package; nothing to upload. It is the first code cell, *Package*, with its code hidden: run
+it first, then the main cell (Runtime → Run all runs every cell in order). `python scripts/make_colab.py` rebuilds
+the notebooks after code changes.
 
 | Notebook | What | GPU, time |
 |---|---|---|

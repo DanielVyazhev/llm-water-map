@@ -2,7 +2,7 @@
 # (CPU, ~1 min; no GPU needed). Run after the main and second-reader cells, or in a new session after
 # the restore cell. Writes <RUN>/paper/ (tables.md, CSVs, a blind sample for human labels) and
 # downloads it as a zip. The tables are built by the same code as the real-text tables (same columns).
-# The drybench package (v1.2.1) is embedded at the bottom; nothing to install.
+# The drybench package (v1.2.1) is embedded as PKG_B64 (notebook: the hidden cell "Package"); nothing to install.
 
 # ---- settings ----
 RUN = "auto"                           # the main cell's folder (Google Drive or /content), or a path
@@ -25,6 +25,8 @@ import pandas as pd
 
 def load_package():
     """Extract the embedded package next to the run and import it from there (no pip)."""
+    if "PKG_B64" not in globals():
+        raise SystemExit('Run the cell "Package" first (its code is hidden), then this cell.')
     digest = hashlib.sha1(PKG_B64.encode()).hexdigest()[:10]
     base = Path("/content") if Path("/content").exists() else Path.cwd()
     pkg = (base / f"drybench_src_{digest}").resolve()

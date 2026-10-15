@@ -4,7 +4,7 @@
 # Writes RUN/baselines/<method>-<label>/<set>.jsonl into each run (planted filler in synthetic reports; planted
 # filler in real texts and Poddar et al.'s human labels), remakes the runs' tables, writes the development values
 # of the confirmatory tests (docs/PROTOCOL.md) and zips everything into drybench_runs/<ZIP_NAME>.zip. About 1–2 h;
-# rerunning resumes. The package is embedded at the bottom of the cell; nothing to upload.
+# rerunning resumes. The package is embedded as PKG_B64 (notebook: the hidden cell "Package"); nothing to upload.
 
 # ---- settings ----
 SYN_RUN = "t4_n20_v12"               # the synthetic development run (T4 notebook drybench_colab.ipynb)
@@ -45,6 +45,8 @@ def run(args):
 
 
 def install():
+    if "PKG_B64" not in globals():
+        raise SystemExit('Run the cell "Package" first (its code is hidden), then this cell.')
     digest = hashlib.sha1(PKG_B64.encode()).hexdigest()[:10]
     base = Path("/content") if Path("/content").exists() else Path.cwd()
     pkg = (base / f"drybench_pkg_{digest}").resolve()

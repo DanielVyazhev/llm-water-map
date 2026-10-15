@@ -3,7 +3,7 @@
 #    300 items × 3 models × 2 prompts; N_PER_CELL = 6 takes ~20 min).
 # Re-running the cell resumes: every step appends to JSONL files and skips finished rows.
 # A newer version of this cell on an old run rescores it and reuses the generated responses.
-# The drybench package (v1.2.1) is embedded at the bottom of the cell; nothing to upload.
+# The drybench package (v1.2.1) is embedded as PKG_B64 (notebook: the hidden cell "Package"); nothing to upload.
 
 # ---- settings ----
 N_PER_CELL = 20                      # items per knob cell; 15 cells → 300 items
@@ -66,6 +66,8 @@ def run(args, check=True):
 
 
 def install():
+    if "PKG_B64" not in globals():
+        raise SystemExit('Run the cell "Package" first (its code is hidden), then this cell.')
     digest = hashlib.sha1(PKG_B64.encode()).hexdigest()[:10]
     base = Path("/content") if Path("/content").exists() else Path.cwd()
     pkg = (base / f"drybench_pkg_{digest}").resolve()

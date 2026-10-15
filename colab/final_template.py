@@ -5,7 +5,7 @@
 # known, the LLM judge and Selective Context, and the two samples for human labels. With the defaults about 8–12 h
 # on an A100. The run lives in Google Drive: after a disconnect, rerun the cell; it resumes. The code is frozen: the
 # run records the package version and a hash of its code in protocol.json and refuses other code or settings.
-# The package is embedded at the bottom of the cell; nothing to upload.
+# The package is embedded as PKG_B64 (notebook: the hidden cell "Package"); nothing to upload.
 
 # ---- settings ----
 RUN_NAME = "final_v1"                # new name = fresh run; same name = resume
@@ -67,6 +67,8 @@ def run(args):
 
 
 def install():
+    if "PKG_B64" not in globals():
+        raise SystemExit('Run the cell "Package" first (its code is hidden), then this cell.')
     digest = hashlib.sha1(PKG_B64.encode()).hexdigest()[:10]
     base = Path("/content") if Path("/content").exists() else Path.cwd()
     pkg = (base / f"drybench_pkg_{digest}").resolve()

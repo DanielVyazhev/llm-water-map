@@ -8,7 +8,8 @@ the cell, so the notebook needs no uploads.
                                             dev_baselines_a100.ipynb
 
 The embedded zip is byte-reproducible (sorted files, fixed dates and permissions): the same code gives the same
-notebooks.
+notebooks. In the notebooks the package line (PKG_B64) is a cell of its own, the first code cell, with its code
+hidden, so the cells' output does not sit below it; the .py cells keep it at the end.
 """
 
 from __future__ import annotations
@@ -63,6 +64,36 @@ def build_cell(overrides: str | None = None, template: str = "cell_template.py")
     return cell
 
 
+PKG_LINE = 'PKG_B64 = "'
+
+
+def split_package(cell: str) -> tuple[str, str]:
+    """The cell's package line and the cell without it (and without the blank line after it)."""
+    a = cell.index("\n" + PKG_LINE) + 1
+    b = cell.index("\n", a) + 1
+    return cell[a:b], cell[:a] + cell[b + (cell[b:b + 1] == "\n"):]
+
+
+def md(text: str) -> dict:
+    return {"cell_type": "markdown", "metadata": {}, "source": text.splitlines(keepends=True)}
+
+
+def code(src: str, hidden: bool = False) -> dict:
+    meta = {"cellView": "form", "jupyter": {"source_hidden": True}} if hidden else {}  # Colab; Jupyter
+    return {"cell_type": "code", "metadata": meta, "execution_count": None, "outputs": [],
+            "source": src.splitlines(keepends=True)}
+
+
+def with_package(cell: str) -> tuple[dict, dict]:
+    """The hidden cell "Package" (to run first) and the main cell without the package line."""
+    from drybench import __version__
+
+    line, rest = split_package(cell)
+    package = code(f"#@title Package v{__version__} (run first; code hidden)\n"
+                   "# The package, zipped and base64-encoded; the other cells extract it.\n" + line, hidden=True)
+    return package, code(rest)
+
+
 EXTRA_CELLS = [
     ("followup_checks.py", "## Details\nCPU only, after the main cell: tolerance check, filler by item design, "
                            "span entropy as a filler detector, completeness check, example spans. "
@@ -77,17 +108,11 @@ EXTRA_CELLS = [
 
 def notebook(cell: str) -> dict:
     intro = ("# Filler in LLM answers: synthetic reports (T4)\n"
-             "Runtime → Change runtime type → **T4 GPU**, then run the cell below. "
-             "Settings are at the top of the cell; rerunning resumes where it stopped.")
-
-    def md(text):
-        return {"cell_type": "markdown", "metadata": {}, "source": text.splitlines(keepends=True)}
-
-    def code(src):
-        return {"cell_type": "code", "metadata": {}, "execution_count": None, "outputs": [],
-                "source": src.splitlines(keepends=True)}
-
-    restore = ("## Optional: restore a saved run\n"
+             "Runtime → Change runtime type → **T4 GPU**, then run *Package* (the code, hidden) and the main cell; "
+             "Runtime → **Run all** also runs the cells after them. Settings are at the top of the main cell; "
+             "rerunning resumes where it stopped.")
+    package, main_cell = with_package(cell)
+    restore =("## Optional: restore a saved run\n"
                "Only to continue a run saved earlier as a `.zip` by the Details cell (e.g. `t4_n20_v12.zip`): set "
                "`RESTORE = True`, run this cell and pick the file; it goes to Google Drive, and the main cell then "
                "reuses its responses. For a new run leave `RESTORE = False`: the cell does nothing.")
@@ -108,9 +133,12 @@ def notebook(cell: str) -> dict:
                     "    for name in files.upload():\n"
                     "        zipfile.ZipFile(name).extractall(dest)\n"
                     "        print(\"restored\", name, \"→\", dest)\n")
-    cells = [md(intro), md(restore), code(restore_code), code(cell)]
+    cells = [md(intro), package, md(restore), code(restore_code), main_cell]
     for name, text in EXTRA_CELLS:
-        cells += [md(text), code((ROOT / "colab" / name).read_text())]
+        src = (ROOT / "colab" / name).read_text()
+        if PKG_LINE in src and split_package(src)[0] == split_package(cell)[0]:
+            src = split_package(src)[1]  # the same package: the cell "Package" serves this cell too
+        cells += [md(text), code(src)]
     return {
         "nbformat": 4, "nbformat_minor": 0,
         "metadata": {"accelerator": "GPU", "colab": {"gpuType": "T4", "provenance": []},
@@ -142,46 +170,33 @@ files.download(f"{out}.zip")
 
 
 def real_notebook(cell: str) -> dict:
-    def md(text):
-        return {"cell_type": "markdown", "metadata": {}, "source": text.splitlines(keepends=True)}
-
-    def code(src):
-        return {"cell_type": "code", "metadata": {}, "execution_count": None, "outputs": [],
-                "source": src.splitlines(keepends=True)}
-
     intro = ("# Filler in LLM answers on real texts (T4)\n"
              "SQuAD 2.0 dev, MuSiQue dev, CUAD contract excerpts and Poddar et al.'s passage questions; "
-             "small models that fit a T4. Runtime → Change runtime type → **T4 GPU**, then run the cell below. "
-             "Settings are at the top of the cell; rerunning resumes where it stopped (with `USE_DRIVE = True` "
-             "the run is kept in Google Drive).")
+             "small models that fit a T4. Runtime → Change runtime type → **T4 GPU**, then run *Package* (the code, "
+             "hidden) and the main cell, or Runtime → **Run all**. Settings are at the top of the main cell; "
+             "rerunning resumes where it stopped (with `USE_DRIVE = True` the run is kept in Google Drive).")
     return {
         "nbformat": 4, "nbformat_minor": 0,
         "metadata": {"accelerator": "GPU", "colab": {"gpuType": "T4", "provenance": []},
                      "kernelspec": {"name": "python3", "display_name": "Python 3"},
                      "language_info": {"name": "python"}},
-        "cells": [md(intro), code(cell), md("## Examples\nWhat the filler map deleted in a few responses per suite."),
+        "cells": [md(intro), *with_package(cell),
+                  md("## Examples\nWhat the filler map deleted in a few responses per suite."),
                   code(REAL_EXAMPLES), md("## Download\nThe run folder as one zip."), code(REAL_DOWNLOAD)],
     }
 
 
 def missing_notebook(cell: str) -> dict:
-    def md(text):
-        return {"cell_type": "markdown", "metadata": {}, "source": text.splitlines(keepends=True)}
-
-    def code(src):
-        return {"cell_type": "code", "metadata": {}, "execution_count": None, "outputs": [],
-                "source": src.splitlines(keepends=True)}
-
     intro = ("# Missing facts: which question to ask the reader (T4, ~30 min)\n"
              "Reads the real-text run in Google Drive (`RUN`) and compares ways of asking the reader about a fact "
              "the source does not state, for each reader in `READERS`. Runtime → Change runtime type → **T4 GPU**, "
-             "then run the cell.")
+             "then run *Package* (the code, hidden) and the main cell.")
     return {
         "nbformat": 4, "nbformat_minor": 0,
         "metadata": {"accelerator": "GPU", "colab": {"gpuType": "T4", "provenance": []},
                      "kernelspec": {"name": "python3", "display_name": "Python 3"},
                      "language_info": {"name": "python"}},
-        "cells": [md(intro), code(cell)],
+        "cells": [md(intro), *with_package(cell)],
     }
 
 
@@ -195,24 +210,18 @@ files.download(f"{out}_annotation.zip")
 
 
 def final_notebook(cell: str) -> dict:
-    def md(text):
-        return {"cell_type": "markdown", "metadata": {}, "source": text.splitlines(keepends=True)}
-
-    def code(src):
-        return {"cell_type": "code", "metadata": {}, "execution_count": None, "outputs": [],
-                "source": src.splitlines(keepends=True)}
-
     intro = ("# Filler in LLM answers: the confirmation run (A100)\n"
              "One frozen version of the code (see `docs/PROTOCOL.md` in the package), new items, seven models, "
              "three readers, every check, the LLM judge and Selective Context, and the samples for human labels. "
-             "Runtime → Change runtime type → **A100 GPU**; put `HF_TOKEN` into the Colab secrets; run the cell. "
-             "Rerunning resumes from Google Drive.")
+             "Runtime → Change runtime type → **A100 GPU**; put `HF_TOKEN` into the Colab secrets; run *Package* "
+             "(the code, hidden) and the main cell. Rerunning resumes from Google Drive.")
     return {
         "nbformat": 4, "nbformat_minor": 0,
         "metadata": {"accelerator": "GPU", "colab": {"gpuType": "A100", "machine_shape": "hm", "provenance": []},
                      "kernelspec": {"name": "python3", "display_name": "Python 3"},
                      "language_info": {"name": "python"}},
-        "cells": [md(intro), code(cell), md("## Download\nThe annotation folder as one zip."), code(FINAL_DOWNLOAD)],
+        "cells": [md(intro), *with_package(cell), md("## Download\nThe annotation folder as one zip."),
+                  code(FINAL_DOWNLOAD)],
     }
 
 
@@ -225,24 +234,18 @@ files.download(str(root / f"{ZIP_NAME}.zip"))
 
 
 def dev_baselines_notebook(cell: str) -> dict:
-    def md(text):
-        return {"cell_type": "markdown", "metadata": {}, "source": text.splitlines(keepends=True)}
-
-    def code(src):
-        return {"cell_type": "code", "metadata": {}, "execution_count": None, "outputs": [],
-                "source": src.splitlines(keepends=True)}
-
     intro = ("# Filler in LLM answers: the LLM judge and Selective Context on the development runs (A100)\n"
              "After the T4 development runs of this package version (synthetic reports and real texts, both in "
-             "Google Drive): Runtime → Change runtime type → **A100 GPU**, run the cell. It adds the judge (Phi-4) "
-             "and Selective Context (Qwen2.5-3B) to both runs, remakes their tables and writes the development "
-             "values of the confirmatory tests (`docs/PROTOCOL.md`).")
+             "Google Drive): Runtime → Change runtime type → **A100 GPU**, run *Package* (the code, hidden) and the "
+             "main cell, or Runtime → **Run all**. It adds the judge (Phi-4) and Selective Context (Qwen2.5-3B) to "
+             "both runs, remakes their tables and writes the development values of the confirmatory tests "
+             "(`docs/PROTOCOL.md`).")
     return {
         "nbformat": 4, "nbformat_minor": 0,
         "metadata": {"accelerator": "GPU", "colab": {"gpuType": "A100", "provenance": []},
                      "kernelspec": {"name": "python3", "display_name": "Python 3"},
                      "language_info": {"name": "python"}},
-        "cells": [md(intro), code(cell), md("## Download\nBoth runs and the statistics as one zip."),
+        "cells": [md(intro), *with_package(cell), md("## Download\nBoth runs and the statistics as one zip."),
                   code(DEV_DOWNLOAD)],
     }
 

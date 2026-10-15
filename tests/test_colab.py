@@ -7,6 +7,8 @@ import json
 import zipfile
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -17,9 +19,12 @@ def _make_colab():
     return mod
 
 
+def _blob(cell: str) -> str:
+    return cell.split('PKG_B64 = "', 1)[1].split('"', 1)[0]
+
+
 def _payload(cell: str) -> zipfile.ZipFile:
-    blob = cell.split('PKG_B64 = "', 1)[1].split('"', 1)[0]
-    return zipfile.ZipFile(io.BytesIO(base64.b64decode(blob)))
+    return zipfile.ZipFile(io.BytesIO(base64.b64decode(_blob(cell))))
 
 
 def test_package_zip_is_reproducible():
@@ -66,3 +71,27 @@ def test_final_and_dev_notebooks_carry_what_they_need():
     assert "results/dev_v1.0/real/items.jsonl" not in _payload(dev).namelist()
     nb = mod.dev_baselines_notebook(dev)
     assert nb["metadata"]["colab"]["gpuType"] == "A100" and "DRY" not in dev.split("PKG_B64 = ")[0]
+
+
+def test_notebooks_hide_the_package():
+    """v1.2.1: the package is the first code cell, its code hidden, and no other cell carries it; a cell that needs
+    it stops with a message when the cell "Package" has not run."""
+    mod = _make_colab()
+    builders = {"cell_template.py": mod.notebook, "real_template.py": mod.real_notebook,
+                "missing_check_template.py": mod.missing_notebook, "final_template.py": mod.final_notebook,
+                "dev_baselines_template.py": mod.dev_baselines_notebook}
+    for template, build in builders.items():
+        cell = mod.build_cell(template=template)
+        codes = [c for c in build(cell)["cells"] if c["cell_type"] == "code"]
+        sources = ["".join(c["source"]) for c in codes]
+        assert [i for i, s in enumerate(sources) if 'PKG_B64 = "' in s] == [0], template
+        assert codes[0]["metadata"]["cellView"] == "form" and sources[0].startswith("#@title Package v")
+        assert _blob(sources[0]) == _blob(cell) and mod.split_package(cell)[1] in sources, template
+        assert not any(c["metadata"] for c in codes[1:]), template  # the other cells show their code
+        needs = [s for s in sources[1:] if "\ndef install():" in s or "\ndef load_package():" in s]
+        assert len(needs) == (2 if template == "cell_template.py" else 1), template  # + the paper tables cell
+        for src in needs:
+            ns = {"__name__": "colab_cell"}
+            exec(src.rstrip().rsplit("\n", 1)[0], ns)  # the definitions, without the last line (the run)
+            with pytest.raises(SystemExit, match='Run the cell "Package" first'):
+                (ns.get("install") or ns["load_package"])()

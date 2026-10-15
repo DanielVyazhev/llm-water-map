@@ -16,6 +16,8 @@ scores stay.
   alone, answered the carrier question with the port.
 - `drybench score` keeps rows of an older scoring version where the newer one did not change them, and stops on
   rows it did change until `prune-scores` removes them.
+- Notebooks: the embedded package is the first code cell, *Package*, with its code hidden; the main cell's output
+  no longer sits below it. The other cells stop with a message when *Package* has not run.
 
 ## 1.2.0 (scoring version 10, signals version 3)
 

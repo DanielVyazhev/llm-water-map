@@ -415,10 +415,10 @@ def test_colab_real_notebook_is_built():
     cell = mod.build_cell(template="real_template.py")
     assert "__PKG_B64__" not in cell and "run_real.py" in cell
     nb = mod.real_notebook(cell)
-    assert nb["metadata"]["colab"]["gpuType"] == "T4" and len(nb["cells"]) == 6
+    assert nb["metadata"]["colab"]["gpuType"] == "T4" and len(nb["cells"]) == 7  # v1.2.1: + the cell "Package"
     miss = mod.build_cell(template="missing_check_template.py")
     assert "__PKG_B64__" not in miss and "missing-check" in miss and "DRY" not in miss.split("PKG_B64 = ")[0]
-    assert len(mod.missing_notebook(miss)["cells"]) == 2
+    assert len(mod.missing_notebook(miss)["cells"]) == 3
 
 
 # ---------------------------------------------------------------- v0.7.1
@@ -604,12 +604,13 @@ def test_colab_final_notebook_is_built():
     cell = mod.build_cell(template="final_template.py")
     assert "__PKG_B64__" not in cell and "run_final.py" in cell and "DRY" not in cell.split("PKG_B64 = ")[0]
     nb = mod.final_notebook(cell)
-    assert nb["metadata"]["colab"]["gpuType"] == "A100" and len(nb["cells"]) == 4
+    assert nb["metadata"]["colab"]["gpuType"] == "A100" and len(nb["cells"]) == 5  # v1.2.1: + the cell "Package"
     import base64
     import io
     import zipfile
 
-    blob = cell.split('PKG_B64 = "', 1)[1].split('"', 1)[0]
+    blob = "".join(nb["cells"][1]["source"]).split('PKG_B64 = "', 1)[1].split('"', 1)[0]
+    assert blob == cell.split('PKG_B64 = "', 1)[1].split('"', 1)[0]
     names = zipfile.ZipFile(io.BytesIO(base64.b64decode(blob))).namelist()
     for f in ("scripts/run_final.py", "scripts/run_synthetic.py", "drybench/judge.py", "docs/PROTOCOL.md",
               "annotation/dry_span_labels_offline.html"):

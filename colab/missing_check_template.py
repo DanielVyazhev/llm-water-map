@@ -5,7 +5,7 @@
 # run's missing-fact answers (Google Drive) and the synthetic missing-fact items, for the main reader,
 # Phi-3.5 and a candidate second reader from another family (IBM Granite 3.3 2B), with the usual reader
 # check for each. GPU (T4), ~30 min; reads the run, changes nothing in it.
-# The drybench package (v__VERSION__) is embedded at the bottom of the cell; nothing to upload.
+# The drybench package (v__VERSION__) is embedded as PKG_B64 (notebook: the hidden cell "Package"); nothing to upload.
 
 # ---- settings ----
 RUN = "/content/drive/MyDrive/drybench_runs/real_t4_n15_v12"  # the real-text run
@@ -46,6 +46,8 @@ def run(args, show=True):
 
 
 def install():
+    if "PKG_B64" not in globals():
+        raise SystemExit('Run the cell "Package" first (its code is hidden), then this cell.')
     digest = hashlib.sha1(PKG_B64.encode()).hexdigest()[:10]
     base = Path("/content") if Path("/content").exists() else Path.cwd()
     pkg = (base / f"drybench_pkg_{digest}").resolve()
