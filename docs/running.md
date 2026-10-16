@@ -109,7 +109,8 @@ SQuAD 2.0 items and decoding, so the development runs are made again under new n
 1. `colab/drybench_colab.ipynb`, `RUN_NAME = "t4_n20_v12"` (the default), then its second-reader cell.
 2. `colab/real_texts_colab.ipynb`, `RUN_NAME = "real_t4_n15_v12"` (the default).
 3. `colab/dev_baselines_a100.ipynb` on an A100: the judge and Selective Context on both runs, the tables again, the
-   development values of the confirmatory tests, everything in `dev_v12_results.zip`.
+   development values of the confirmatory tests, everything in `dev_v12_results.zip`. On a server instead of
+   Colab: both run folders copied into `RUN_ROOT`, `USE_DRIVE = False`, models as local folders, `PIP = False`.
 4. Compare with `results/dev_v1.0`; check `added_answers` in `scored.jsonl`, above all wordings with a comma, a
    bracket, "not" or "or" before the answer, and very short ones.
 5. The development values and the thresholds of H1 into

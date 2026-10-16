@@ -95,3 +95,21 @@ def test_notebooks_hide_the_package():
             exec(src.rstrip().rsplit("\n", 1)[0], ns)  # the definitions, without the last line (the run)
             with pytest.raises(SystemExit, match='Run the cell "Package" first'):
                 (ns.get("install") or ns["load_package"])()
+
+
+def test_dev_cell_reads_local_models_without_the_hub(tmp_path):
+    """v1.2.2: on a server whose models are local folders, nothing is fetched from the Hugging Face hub."""
+    cell = _make_colab().build_cell(template="dev_baselines_template.py")
+    ns = {"__name__": "colab_cell"}
+    exec(cell.split('\nPKG_B64 = "')[0], ns)  # settings and definitions; no package, no run
+    for key in ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE"):
+        ns["ENV"].pop(key, None)
+    (tmp_path / "judge").mkdir()
+    (tmp_path / "small").mkdir()
+    ns["JUDGES"], ns["SELECTIVE"] = {"j": str(tmp_path / "judge")}, {"s": str(tmp_path / "small")}
+    ns["local_models"]()
+    assert ns["ENV"]["HF_HUB_OFFLINE"] == "1" and ns["ENV"]["TRANSFORMERS_OFFLINE"] == "1"
+    ns["ENV"].pop("HF_HUB_OFFLINE")
+    ns["SELECTIVE"] = {"s": "Qwen/Qwen2.5-3B-Instruct"}  # a hub id: the hub stays on
+    ns["local_models"]()
+    assert "HF_HUB_OFFLINE" not in ns["ENV"]

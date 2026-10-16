@@ -17,6 +17,9 @@ Reports only: no score changes; runs of 1.2.1 stay and their tables are remade f
   runners show one progress line per tenth of a step.
 - Colab: the tables show "$" as text, not as LaTeX; the second-reader cell reports the pooled check values of the
   tables.
+- `colab/dev_baselines_a100.ipynb` runs on a server too: the runs in `RUN_ROOT`, models given as local folders
+  (then nothing is fetched from the Hugging Face hub), `PIP = False` (nothing installed: the package runs from its
+  folder with the server's libraries; also the fallback when pip has no internet), `GPU`.
 
 ## 1.2.1 (scoring version 11)
 

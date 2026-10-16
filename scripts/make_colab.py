@@ -226,10 +226,13 @@ def final_notebook(cell: str) -> dict:
 
 
 DEV_DOWNLOAD = """# Download both development runs with the baselines, the tables and the confirmatory statistics.
-from google.colab import files
+root = Path("/content/drive/MyDrive/drybench_runs") if USE_DRIVE else Path(RUN_ROOT).expanduser()
+try:
+    from google.colab import files
 
-root = Path("/content/drive/MyDrive/drybench_runs") if USE_DRIVE else Path(RUN_ROOT)
-files.download(str(root / f"{ZIP_NAME}.zip"))
+    files.download(str(root / f"{ZIP_NAME}.zip"))
+except ImportError:  # a server: the zip is on its disk
+    print("The zip:", root / f"{ZIP_NAME}.zip")
 """
 
 

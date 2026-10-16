@@ -650,3 +650,64 @@ def test_planted_recall_counts_responses_without_a_map():
     rows = [{"labels": ["fact", "filler:hedge"], "loo_status": "ok", "loo_kept": [True, False]},
             {"labels": ["fact", "filler:hedge", "filler:closing"], "loo_status": "no_signal"}]
     assert _recall_with_unscored(rows) == pytest.approx(1 / 3)
+
+
+# ---------------------------------------------------------------- v1.2.2: the development baselines on a server
+
+def test_dev_baselines_cell_on_a_server(cuad_file, poddar_file, tmp_path):
+    """The A100 notebook of the development baselines outside Colab: the runs in a folder, nothing installed
+    (PIP = False: the package runs from its folder), models named by path; it writes the baselines of every
+    truth set, both runs' tables, the development values of the confirmatory tests and the zip."""
+    import importlib.util
+    import os
+
+    data = tmp_path / "data"
+    for sub, src, name in (("squad2", None, "dev-v2.0.json"), ("musique", MUSIQUE, "musique_full_v1.0_dev.jsonl"),
+                           ("cuad", cuad_file, "CUADv1.json"), ("poddar", poddar_file, "data.jsonl")):
+        (data / sub).mkdir(parents=True)
+        if src is None:
+            _squad_file(data / sub / name)
+        else:
+            (data / sub / name).write_bytes(Path(src).read_bytes())
+    root = tmp_path / "runs"
+    real, syn = root / "real_dev", root / "syn_dev"
+    cmd = [sys.executable, ROOT / "scripts" / "run_real.py", "--run", real, "--data", data, "--backend", "mock",
+           "--allow-cpu", "--models", "m1=echo", "--reader", "mock", "--reader2", "none", "--variants", "default",
+           "--n-per-cell", "1", "--oversample", "1", "--filler-check-n", "1", "--real-check-n", "1",
+           "--distractors", "1"]
+    out = subprocess.run([str(c) for c in cmd], capture_output=True, text=True, timeout=600)
+    assert out.returncode == 0, out.stdout[-3000:] + out.stderr[-3000:]
+    spec = importlib.util.spec_from_file_location("tb", Path(__file__).with_name("test_baselines_v1.py"))
+    tb = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(tb)
+    syn.mkdir(parents=True)
+    tb._synthetic_run(syn)
+    models = tmp_path / "models"  # local model folders: no hub calls (the mock backend reads none of them)
+    (models / "judge").mkdir(parents=True)
+    (models / "small").mkdir()
+    spec = importlib.util.spec_from_file_location("make_colab", ROOT / "scripts" / "make_colab.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    settings = (f'SYN_RUN = "syn_dev"\nREAL_RUN = "real_dev"\nJUDGES = {{"mock": "{models / "judge"}"}}\n'
+                f'SELECTIVE = {{"mock": "{models / "small"}"}}\nPODDAR_DATA = None\nDTYPE = "fp32"\n'
+                f'MAX_BATCH_TOKENS = 4096\nBACKEND = "mock"\nZIP_NAME = "dev_test"\nUSE_DRIVE = False\n'
+                f'RUN_ROOT = "{root}"\nGPU = None\nPIP = False\n')
+    work = tmp_path / "work"
+    work.mkdir()
+    (work / "cell.py").write_text(mod.build_cell(settings, template="dev_baselines_template.py"))
+    env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}  # drybench only from the cell's package
+    out = subprocess.run([sys.executable, work / "cell.py"], cwd=work, capture_output=True, text=True, timeout=900,
+                         env=env)
+    assert out.returncode == 0, out.stdout[-3000:] + out.stderr[-3000:]
+    assert "nothing installed: the package runs from" in out.stdout and "pip install" not in out.stdout
+    for run, sets in ((syn, ["planted_synthetic"]), (real, ["planted_real", "human_poddar"])):
+        for name in sets:
+            for method in ("judge-mock", "selective-mock"):
+                assert (run / "baselines" / method / f"{name}.jsonl").stat().st_size > 0, (run.name, name, method)
+    assert "LLM judge (mock)" in (real / "tables_real.md").read_text()
+    assert "LLM judge (mock)" in (syn / "tables_synthetic.md").read_text()
+    assert "| H1 T1 |" in (root / "dev_test_confirmatory.md").read_text()
+    import zipfile
+
+    names = zipfile.ZipFile(root / "dev_test.zip").namelist()
+    assert "dev_test_confirmatory.md" in names and any(n.startswith("real_dev/baselines/") for n in names)
