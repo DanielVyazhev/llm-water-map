@@ -152,3 +152,39 @@ def test_terminated_logprobs_match_the_next_token_distribution(backend):
         digits = [i for i in range(len(backend.tokenizer)) if backend.tokenizer.decode([i])[:1].isdigit()]
         p_digit = torch.logsumexp(nxt[digits], 0).exp().item()
         assert got == pytest.approx(lp + math.log1p(-p_digit), abs=1e-4)
+
+
+def test_probe_models_on_a_tiny_chat_model(tmp_path):
+    """v1.2.3: scripts/probe_models.py loads a local model folder and runs it as an evaluated model, a reader and
+    a judge, one row per folder (a folder without config.json is reported, not fatal)."""
+    import json
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    from tokenizers import ByteLevelBPETokenizer
+    from transformers import GPT2Config, GPT2LMHeadModel, PreTrainedTokenizerFast
+
+    d = tmp_path / "tiny-chat"
+    corpus = [it.document + "\n" + it.request + "\n" + it.gold_minimal for it in generate_items(3, seed=1)]
+    bpe = ByteLevelBPETokenizer()
+    bpe.train_from_iterator(corpus + ["needed filler wrong Needed Filler Wrong"], vocab_size=500, min_frequency=1,
+                            special_tokens=["<|endoftext|>"])
+    tok = PreTrainedTokenizerFast(tokenizer_object=bpe, eos_token="<|endoftext|>")
+    tok.chat_template = ("{% for m in messages %}<|{{ m.role }}|>{{ m.content }}\n{% endfor %}"
+                         "{% if add_generation_prompt %}<|assistant|>{% endif %}")
+    tok.save_pretrained(d)
+    torch.manual_seed(0)
+    GPT2LMHeadModel(GPT2Config(vocab_size=len(tok), n_positions=1024, n_embd=32, n_layer=2, n_head=2,
+                               bos_token_id=tok.eos_token_id, eos_token_id=tok.eos_token_id)).save_pretrained(d)
+    (tmp_path / "empty").mkdir()
+    out = tmp_path / "probe.jsonl"
+    script = Path(__file__).resolve().parents[1] / "scripts" / "probe_models.py"
+    r = subprocess.run([sys.executable, str(script), str(d), str(tmp_path / "empty"), "--out", str(out),
+                        "--dtype", "fp32", "--sha256", str(d)], capture_output=True, text=True, timeout=600)
+    assert r.returncode == 0, r.stdout[-2000:] + r.stderr[-2000:]
+    rows = [json.loads(x) for x in out.read_text().splitlines()]
+    assert rows[0]["loads"] and rows[0]["chat_template"] and "facts_in_text" in rows[0]["answer"]
+    assert len(rows[0]["reader"]["p_gold"]) == 2 and len(rows[0]["judge"]["labels"]) == 3
+    assert rows[0]["sha256"] and rows[1]["error"].startswith("no config.json")
+    assert "tiny-chat | GPT2LMHeadModel" in r.stdout

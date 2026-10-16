@@ -53,6 +53,7 @@ def test_notebooks_embed_the_current_code():
                                                 indent=1),
         "final_a100.ipynb": json.dumps(mod.final_notebook(final), indent=1),
         "dev_baselines_a100.ipynb": json.dumps(mod.dev_baselines_notebook(dev), indent=1),
+        "probe_models.ipynb": json.dumps(mod.probe_notebook(mod.build_cell(template="probe_template.py")), indent=1),
     }
     stale = [f for f, text in expected.items() if (ROOT / "colab" / f).read_text() != text]
     assert not stale, f"rebuild with scripts/make_colab.py: {stale}"
@@ -79,7 +80,7 @@ def test_notebooks_hide_the_package():
     mod = _make_colab()
     builders = {"cell_template.py": mod.notebook, "real_template.py": mod.real_notebook,
                 "missing_check_template.py": mod.missing_notebook, "final_template.py": mod.final_notebook,
-                "dev_baselines_template.py": mod.dev_baselines_notebook}
+                "dev_baselines_template.py": mod.dev_baselines_notebook, "probe_template.py": mod.probe_notebook}
     for template, build in builders.items():
         cell = mod.build_cell(template=template)
         codes = [c for c in build(cell)["cells"] if c["cell_type"] == "code"]
@@ -88,13 +89,13 @@ def test_notebooks_hide_the_package():
         assert codes[0]["metadata"]["cellView"] == "form" and sources[0].startswith("#@title Package v")
         assert _blob(sources[0]) == _blob(cell) and mod.split_package(cell)[1] in sources, template
         assert not any(c["metadata"] for c in codes[1:]), template  # the other cells show their code
-        needs = [s for s in sources[1:] if "\ndef install():" in s or "\ndef load_package():" in s]
+        needs = [s for s in sources[1:] if any(f"\ndef {f}():" in s for f in ("install", "load_package", "extract"))]
         assert len(needs) == (2 if template == "cell_template.py" else 1), template  # + the paper tables cell
         for src in needs:
             ns = {"__name__": "colab_cell"}
             exec(src.rstrip().rsplit("\n", 1)[0], ns)  # the definitions, without the last line (the run)
             with pytest.raises(SystemExit, match='Run the cell "Package" first'):
-                (ns.get("install") or ns["load_package"])()
+                (ns.get("install") or ns.get("load_package") or ns["extract"])()
 
 
 def test_dev_cell_reads_local_models_without_the_hub(tmp_path):

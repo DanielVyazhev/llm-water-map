@@ -2,6 +2,14 @@
 
 A change of the scoring version makes a resumed run recompute its scores ([running](docs/running.md#rescoring)).
 
+## 1.2.3 (scoring version 11)
+
+No score changes.
+- `scripts/probe_models.py` and `colab/probe_models.ipynb`: which local model folders this machine can run and how
+  each behaves as an evaluated model (a plain answer with the facts, not a reasoning trace), a reader (reads the
+  facts of a gold answer) and a judge (labels an opener and the facts; probability mass on the labels); the GPU
+  memory each takes; optionally the sha256 of the weight files. Nothing is downloaded or installed.
+
 ## 1.2.2 (scoring version 11)
 
 Reports only: no score changes; runs of 1.2.1 stay and their tables are remade from the stored rows.

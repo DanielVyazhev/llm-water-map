@@ -40,6 +40,13 @@ the notebooks after code changes.
 | `colab/dev_baselines_a100.ipynb` | LLM judge (Phi-4) and Selective Context on both development runs; development values of the confirmatory tests | A100, 1–2 h |
 | `colab/final_a100.ipynb` | confirmation run ([PROTOCOL.md](PROTOCOL.md)) | A100, 8–12 h; HF token with Llama and Gemma access |
 
+## A server with local models
+
+`colab/probe_models.ipynb` (or `python scripts/probe_models.py DIR [DIR ...]`): for each local model folder, whether
+it loads, answers a report request in plain text, reads the facts of a gold answer and labels fragments as a
+judge, and the GPU memory it takes; nothing is downloaded or installed. `colab/dev_baselines_a100.ipynb` runs
+there with `USE_DRIVE = False`, local model folders and `PIP = False`.
+
 ## GPU server
 
 ```bash

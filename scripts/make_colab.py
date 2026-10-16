@@ -5,7 +5,7 @@ the cell, so the notebook needs no uploads.
 
   python scripts/make_colab.py            → colab/drybench_colab.ipynb, colab/drybench_colab_cell.py,
                                             real_texts_colab.ipynb, missing_check_colab.ipynb, final_a100.ipynb,
-                                            dev_baselines_a100.ipynb
+                                            dev_baselines_a100.ipynb, probe_models.ipynb
 
 The embedded zip is byte-reproducible (sorted files, fixed dates and permissions): the same code gives the same
 notebooks. In the notebooks the package line (PKG_B64) is a cell of its own, the first code cell, with its code
@@ -27,8 +27,9 @@ sys.path.insert(0, str(ROOT))  # the version stamped on the notebooks is the pac
 
 PACKAGED = ["LICENSE", "pyproject.toml", "README.md", "scripts/pilot_validation.py", "scripts/run_real.py",
             "scripts/run_synthetic.py", "scripts/run_final.py", "scripts/show_checks.py", "scripts/trace_response.py",
-            "scripts/chat_annotators.py", "scripts/check_abstain.py", "annotation/dry_span_labels_offline.html",
-            "docs/ANNOTATION.md", "docs/PROTOCOL.md", "results/abstain_labels.json"]
+            "scripts/chat_annotators.py", "scripts/check_abstain.py", "scripts/probe_models.py",
+            "annotation/dry_span_labels_offline.html", "docs/ANNOTATION.md", "docs/PROTOCOL.md",
+            "results/abstain_labels.json"]
 ZIP_DATE = (2020, 1, 1, 0, 0, 0)
 
 
@@ -253,6 +254,19 @@ def dev_baselines_notebook(cell: str) -> dict:
     }
 
 
+def probe_notebook(cell: str) -> dict:
+    intro = ("# Filler in LLM answers: which local models the benchmark can use (a server)\n"
+             "Set `MODELS` (local model folders) at the top of the main cell, then run *Package* (the code, hidden) "
+             "and the main cell. Each model: does it load, does it answer in plain text, can it serve as reader and "
+             "as judge, how much GPU memory it takes. Nothing is downloaded or installed.")
+    return {
+        "nbformat": 4, "nbformat_minor": 0,
+        "metadata": {"kernelspec": {"name": "python3", "display_name": "Python 3"},
+                     "language_info": {"name": "python"}},
+        "cells": [md(intro), *with_package(cell)],
+    }
+
+
 def main() -> None:
     out = ROOT / "colab"
     cell = build_cell()
@@ -269,6 +283,8 @@ def main() -> None:
     (out / "final_a100.ipynb").write_text(json.dumps(final_notebook(final), indent=1))
     dev = build_cell(template="dev_baselines_template.py")
     (out / "dev_baselines_a100.ipynb").write_text(json.dumps(dev_baselines_notebook(dev), indent=1))
+    probe = build_cell(template="probe_template.py")
+    (out / "probe_models.ipynb").write_text(json.dumps(probe_notebook(probe), indent=1))
     print(f"cell: {len(cell) / 1024:.0f} KB, real-text cell: {len(real) / 1024:.0f} KB → {out}")
 
 
