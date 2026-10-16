@@ -264,6 +264,8 @@ def cmd_examples(args: argparse.Namespace) -> None:
     responses = {key(r): r["response"] for r in read_jsonl(run / "responses.jsonl")} \
         if (run / "responses.jsonl").exists() else {}
     d = it[it["status"] == "ok"]
+    if not args.design and "missing" in d:  # as in the tables: missing-fact items only when asked for by design
+        d = d[~d["missing"].astype(bool)]
     for col, val in (("model", args.model), ("variant", args.variant), ("design", args.design),
                      ("source", args.source)):
         if val:

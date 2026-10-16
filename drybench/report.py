@@ -330,16 +330,34 @@ def _kept_note(label: str, n: int, not_candidate: float) -> str:
             f"{100 * (1 - not_candidate):.0f}% could go alone but not together with the fragments deleted before them.")
 
 
+def _filler_check_values(sub: Path) -> dict | None:
+    """The check's values per setting, recomputed from its stored rows when there are any (v1.2.2: the error of
+    the removable share against the planted truth), else as its summary.json has them."""
+    path, rows_path = sub / "filler_check" / "summary.json", sub / "filler_check" / "rows.jsonl"
+    if not path.exists() and not rows_path.exists():
+        return None
+    ws = json.loads(path.read_text()) if path.exists() else {}
+    if rows_path.exists():
+        from drybench.compare import read_rows
+        from drybench.simulate import filler_check_metrics
+
+        rows = read_rows(rows_path)
+        for key in ("loo", "loo_t2", "loo_prefix"):
+            ok = [r for r in rows if r.get(f"{key}_status") == "ok" and r.get(f"{key}_W") == r.get(f"{key}_W")]
+            if ok:
+                ws.setdefault(key, {}).update({f"check_{k}": v for k, v in filler_check_metrics(ok, key).items()})
+    return ws
+
+
 def _filler_check_section(subs: list[tuple[str, Path]],
                          heading: str = "## R2. Filler map on simulated responses with known filler") -> list[str]:
     """R2 (T1 for the synthetic run): the filler map on simulated responses with planted filler, one
     row per reader × tolerance."""
     rows, types, kept_notes = {}, [], []
     for label, sub in subs:
-        path = sub / "filler_check" / "summary.json"
-        if not path.exists():
+        ws = _filler_check_values(sub)
+        if ws is None:
             continue
-        ws = json.loads(path.read_text())
         for key, tol in (("loo", "0.5 nats"), ("loo_t2", "2 nats"), ("loo_prefix", f"0.5 nats, {PREFIX}")):
             v = ws.get(key) or {}
             if "check_recall_pooled" not in v:
@@ -350,8 +368,8 @@ def _filler_check_section(subs: list[tuple[str, Path]],
                 "no fact lost": v["check_no_fact_lost"], "precision": v["check_precision_pooled"],
                 "recall, planted fragments": f"{v['check_recall_pooled']:.3f} [{lo:.3f}, {hi:.3f}]",
                 "recall per response with filler": v["check_recall_with_filler"],
-                "repeats resolved": v["check_repeats_resolved"], "MAE of W": v["check_W_mae"],
-                "mean error of W": v["check_W_bias"]}
+                "repeats resolved": v["check_repeats_resolved"], "MAE of removable share": v["check_W_mae"],
+                "mean error of removable share": v["check_W_bias"]}
             if key == "loo":
                 types.append(f"{label}: " + ", ".join(f"{t} {c['removed']}/{c['planted']}"
                                                       for t, c in v["check_recall_by_type"].items()))
@@ -365,7 +383,9 @@ def _filler_check_section(subs: list[tuple[str, Path]],
             "Synthetic reports; each response = the requested facts + planted filler of known type "
             "(none / 2 / 5 fragments, or 2 with one fact left out). Recall counts planted filler "
             "fragments (95% CI, bootstrap over items); a repeat is resolved when no fact is stated twice "
-            "after deletion; W error = measured − true filler share. "
+            "after deletion; error of the removable share = measured − true, by characters, true = the planted "
+            "filler (a summary that repeats the facts included: of two statements of a fact the first stays; "
+            "v1.2.2, up to v1.2.1 the shortest set of fragments stating every fact). "
             f"'{PREFIX}' = the deletion search stops at the first fragment that cannot go together with the "
             "ones before it (the default skips that fragment and continues).", "", md(t), "",
             "Deleted / planted by type (τ = 0.5): " + "; ".join(types) + "."] + \
@@ -459,7 +479,11 @@ def _planted_section(subs: list[tuple[str, Path]], missing: set = frozenset()) -
             "Truth is known per fragment: a fact is stated by the sentence chosen for it and by the summary, not by "
             "a sentence that only mentions its answer (v1.2). Recall counts planted filler fragments (95% CI, "
             "bootstrap over items); '… counting unscored responses' also counts the planted filler of the responses "
-            "from which the reader reads no fact (no filler map) as not deleted. Items with a missing fact, and "
+            "from which the reader reads no fact (no filler map) as not deleted. Error of the removable share: "
+            "measured − true, by characters, true = the planted filler and wrong statements (v1.2.2; up to v1.2.1 "
+            "the shortest set of fragments stating every fact: in a response with a summary, almost always the "
+            "summary). "
+            "Items with a missing fact, and "
             "items whose facts the document does not state in a sentence, are left out. "
             f"'{PREFIX}' = the deletion search stops at the first fragment that cannot go together with the ones "
             "before it (the default skips that fragment and continues).",

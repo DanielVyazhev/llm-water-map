@@ -114,7 +114,7 @@ def main():
     try:
         from IPython.display import Markdown, display
 
-        display(Markdown(dev.read_text()))
+        display(Markdown(dev.read_text().replace("$", r"\$")))  # "$10.00" is not LaTeX
     except ImportError:
         pass
     print(f"\nTables: {syn / 'tables_synthetic.md'}, {real / 'tables_real.md'}\nDevelopment values of the "

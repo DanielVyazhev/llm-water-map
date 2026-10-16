@@ -67,15 +67,17 @@ def compare(out, r2):
                                        "nats per fact": v["gain_present_median"]})(json.loads(p.read_text()))
                         for k, p in checks.items()}).round(3).to_string())
 
+    from drybench.compare import read_rows
+    from drybench.simulate import filler_check_metrics
+
     rows = {}
-    for k, path in (("main", out / "filler_check" / "summary.json"), (LABEL2, r2 / "filler_check" / "summary.json")):
-        if path.exists():
-            ws = json.loads(path.read_text())
-            for key, name in (("loo", "τ=0.5"), ("loo_t1", "τ=1"), ("loo_t2", "τ=2")):
-                if key in ws:
-                    rows[f"{k}, {name}"] = {"no fact lost": ws[key]["safety_all_ok"],
-                                            "precision": ws[key]["filler_precision"],
-                                            "recall": ws[key]["filler_recall"], "MAE": ws[key]["mae"]}
+    for k, path in (("main", out / "filler_check" / "rows.jsonl"), (LABEL2, r2 / "filler_check" / "rows.jsonl")):
+        checked = read_rows(path)  # the same pooled values as the paper tables
+        for key, name in (("loo", "τ=0.5"), ("loo_t1", "τ=1"), ("loo_t2", "τ=2")):
+            m = filler_check_metrics([r for r in checked if r.get(f"{key}_status") == "ok"], key)
+            if m.get("n_responses"):
+                rows[f"{k}, {name}"] = {"no fact lost": m["no_fact_lost"], "precision": m["precision_pooled"],
+                                        "recall": m["recall_pooled"], "MAE of removable share": m["W_mae"]}
     if rows:
         print("\nFiller-map check on simulated responses with known filler:")
         print(pd.DataFrame(rows).T.round(3).to_string())

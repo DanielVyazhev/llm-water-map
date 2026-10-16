@@ -135,7 +135,7 @@ def main():
 
         for t in (out / "synthetic" / "tables_synthetic.md", out / "real" / "tables_real.md"):
             if t.exists():
-                display(Markdown(t.read_text()))
+                display(Markdown(t.read_text().replace("$", r"\$")))  # "$10.00" is not LaTeX
     except ImportError:
         pass
     print(f"\nRun folder: {out}\nFor the annotators: {out}/annotation ({out}_annotation.zip)\nWhole run: {out}.zip\n"

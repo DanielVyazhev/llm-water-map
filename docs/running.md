@@ -101,6 +101,7 @@ flowchart TD
     R2 --> T
 ```
 
+v1.2.2 changes reports only (scoring version 11 stays): the tables of a run of v1.2.1 are remade from its rows.
 v1.2.1 (scoring version 11) changes synthetic reports only: a run of v1.2.0 rescores the answers to synthetic items
 and the synthetic planted-filler check, and keeps its real-text scores. v1.2.0 (scoring version 10) also changed
 SQuAD 2.0 items and decoding, so the development runs are made again under new names instead of rescored:
@@ -121,6 +122,7 @@ python scripts/show_checks.py filler RUN/filler_check/rows.jsonl RUN/reader2_*/f
 python scripts/show_checks.py readers RUN                                  # main vs second reader
 python scripts/show_checks.py examples RUN --model qwen2.5-0.5b --variant default   # before / after deletion
 python scripts/trace_response.py RUN --model qwen2.5-0.5b --item sq00-0003 --out trace.json   # every reader call
+python scripts/r3_losses.py RUN --examples 5 --csv mentions.csv   # R3: why a fact counts as lost
 ```
 
 ## Pilot without a GPU

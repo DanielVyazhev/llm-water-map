@@ -13,7 +13,7 @@ import pytest
 from drybench.cli import main as cli
 from drybench.items import generate_items
 from drybench.report import _filler_check_section
-from drybench.simulate import simulate, filler_check_metrics
+from drybench.simulate import filler_check_metrics, share_error, simulate
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -46,6 +46,22 @@ def test_metrics_count_planted_filler_not_empty_responses():
     assert 0 <= lo <= m["recall_pooled"] <= hi <= 1
 
 
+def test_share_error_follows_the_planted_truth():
+    """v1.2.2: a summary shorter than the source sentence it repeats is the filler (the first statement stays), so
+    keeping the sentence and deleting the summary is no error; the shortest-cover truth made it −(the sentence)."""
+    texts = ["Sure, let me look at the text for you.", "A long source sentence that states the fact in many words.",
+             "In summary: X."]
+    row = {"labels": ["filler:preamble", "fact", "filler:summary"], "span_texts": texts,
+           "loo_kept": [False, True, False], "loo_W": 0.5, "W_true": 0.9}
+    assert share_error(row) == pytest.approx(0.0)
+    row["loo_kept"] = [True, True, False]  # the preamble left in
+    assert share_error(row) == pytest.approx(-len(texts[0]) / sum(map(len, texts)))
+    row["labels"][2], row["loo_kept"] = "wrong", [False, True, True]  # a wrong statement left in
+    assert share_error(row) == pytest.approx(-len(texts[2]) / sum(map(len, texts)))
+    del row["span_texts"]
+    assert share_error(row) == pytest.approx(0.5 - 0.9)  # rows without fragment texts: the stored shares
+
+
 def test_simulated_filler_is_never_planted_twice():
     items = [it for it in generate_items(3, seed=2026, cells=[{"k": 1, "d": 0}, {"k": 2, "d": 4}])]
     for it in items:
@@ -73,6 +89,11 @@ def test_runner_filler_check_and_viewer(tmp_path):
     assert row["request"] and len(row["span_texts"]) == len(row["labels"])
     lines = _filler_check_section([("main", tmp_path)])
     assert lines[1].startswith("## R2") and any("recall" in l for l in lines)
+    # v1.2.2: the table recomputes the check from the rows (the share error against the planted truth)
+    tampered = dict(summary, loo={**summary["loo"], "check_W_mae": 9.99})
+    (tmp_path / "filler_check" / "summary.json").write_text(json.dumps(tampered))
+    text = "\n".join(_filler_check_section([("main", tmp_path)]))
+    assert "9.99" not in text and "MAE of removable share" in text
     out = subprocess.run([sys.executable, ROOT / "scripts" / "show_checks.py", "filler",
                           tmp_path / "filler_check" / "rows.jsonl", "--examples", "1"],
                          capture_output=True, text=True, check=True).stdout
@@ -102,6 +123,13 @@ def test_viewer_on_two_readers_and_examples(tmp_path):
     assert "Great question!" in out.split("AFTER DELETING:")[0]
     after = out.split("AFTER DELETING:")[1].split("DELETED:")[0]
     assert "Great question" not in after and "I hope this helps" not in after
+    # v1.2.2: as in the tables, missing-fact items only when asked for by design
+    out = subprocess.run([sys.executable, ROOT / "scripts" / "show_checks.py", "examples", tmp_path,
+                          "--examples", "50"], capture_output=True, text=True, check=True).stdout
+    assert "MODEL'S ANSWER:" in out and "(missing fact)" not in out
+    out = subprocess.run([sys.executable, ROOT / "scripts" / "show_checks.py", "examples", tmp_path, "--examples",
+                          "1", "--design", "missing fact"], capture_output=True, text=True, check=True).stdout
+    assert "(missing fact)" in out
     assert "Great question!" in out.split("DELETED:")[1]
 
 
@@ -141,3 +169,23 @@ def test_trace_of_a_response_without_a_filler_map(tmp_path):
                          text=True)
     tr = json.loads(out.read_text())
     assert tr["status"] == "no_signal" and "fragments" not in tr and "no filler map (no_signal)" in run.stdout
+
+
+def test_r3_losses_sorts_lost_facts(tmp_path):
+    """v1.2.2: scripts/r3_losses.py tells a fact the reader did not read from one a kept fragment mentions."""
+    from drybench.types import Item, Probe
+
+    r3 = _load_script("r3_losses")
+    item = Item(item_id="cu00-0001", knobs={"source": "cuad"}, document="", request="Q1? Q2?", gold_minimal="",
+                probes=[Probe("What is the title?", ["Supply Agreement"], fact_id="t", required=True),
+                        Probe("Which law governs?", ["Ohio"], fact_id="g", required=True)])
+    row = {"item_id": "cu00-0001", "condition": "dense", "source": "cuad", "per_probe": [9.0, 0.2],
+           "labels": ["fact", "fact"], "span_facts": [["t"], ["g"]], "loo_kept": [False, False],
+           "span_texts": ["SUPPLY AGREEMENT", "This agreement is governed by the laws of Ohio."]}
+    assert [x["kind"] for x in r3.losses(row, item)] == ["other", "not read"]
+    row["labels"] += ["filler:elaboration"]
+    row["span_facts"] += [[]]
+    row["loo_kept"] += [True]
+    row["span_texts"] += ["This Supply Agreement is made between A and B."]
+    lost = r3.losses(row, item)
+    assert [x["kind"] for x in lost] == ["mention", "not read"] and lost[0]["kept_mentions"] == [row["span_texts"][2]]

@@ -319,7 +319,7 @@ def cmd_score(args: argparse.Namespace) -> None:
         if args.judge:
             row["judge_W"] = judge_filler(reader.backend, items[r["item_id"]].request, r["response"])
         _append(args.out, row)
-        if n % 10 == 0:
+        if n % 10 == 0 or n == len(rows):  # the last one too: "scored 1870/1872" read as two lost rows
             print(f"scored {n}/{len(rows)}", file=sys.stderr)
 
 
@@ -348,7 +348,7 @@ def cmd_signals(args: argparse.Namespace) -> None:
         if args.sampled:
             row["H_sampled"] = answer_entropy_sampled(backend, it, n=args.sampled)
         _append(args.out, row)
-        if n % 10 == 0:
+        if n % 10 == 0 or n == len(rows):
             print(f"signals {n}/{len(rows)}", file=sys.stderr)
 
 

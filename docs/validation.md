@@ -59,6 +59,10 @@ deleting the chosen sentence loses the fact (up to v1.1 the truth counted such m
   facts another kept fragment states may go).
 - **Recall**: share of planted filler fragments deleted (95% CI, bootstrap over items).
 - **Repeats resolved**: no fact is stated twice after deletion (either copy may go).
+- **Error of the share**: measured − true removable share, by characters; true = the planted filler, the summary
+  included (the guidelines keep the first statement of a fact), and wrong statements (v1.2.2; up to v1.2.1 the
+  shortest set of fragments that states every fact, which counted the source sentences as removable whenever the
+  summary was shorter).
 - A planted fragment left in is reported as "costs more than the tolerance alone" or "blocked in the queue".
 - Responses from which the reader reads no fact have no filler map; recall is reported without and with them
   (their planted filler counted as not deleted).

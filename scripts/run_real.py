@@ -71,12 +71,16 @@ def run(args, check: bool = True) -> int:
     print("$", " ".join(shown), flush=True)
     t0 = time.time()
     p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=ENV)
+    tenth = 0  # progress: one line per tenth of a step, and the last
     for line in p.stdout:
         if "it/s]" in line or "s/it]" in line:
             continue
-        m = PROGRESS.match(line.strip())  # about ten progress lines per step
-        if m and int(m.group(1)) % max(10, int(m.group(2)) // 10) and m.group(1) != m.group(2):
-            continue
+        m = PROGRESS.match(line.strip())
+        if m:
+            n, total = int(m.group(1)), int(m.group(2))
+            if n != total and n * 10 // total <= tenth:
+                continue
+            tenth = n * 10 // total
         print("   ", line, end="", flush=True)
     code = p.wait()
     print(f"    [{time.time() - t0:.0f}s]", flush=True)

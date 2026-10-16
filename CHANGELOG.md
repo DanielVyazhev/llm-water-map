@@ -2,6 +2,22 @@
 
 A change of the scoring version makes a resumed run recompute its scores ([running](docs/running.md#rescoring)).
 
+## 1.2.2 (scoring version 11)
+
+Reports only: no score changes; runs of 1.2.1 stay and their tables are remade from the stored rows.
+- T1/R2 and R3: the error of the removable share is measured against the planted truth, by characters: the planted
+  filler, a summary that repeats the facts included, and planted wrong statements. That is the guidelines' truth
+  (of two statements of a fact the first stays), which the filler map follows since 1.2.0. Up to 1.2.1 it was the
+  shortest set of fragments stating every fact, which counts the source sentences as removable whenever the
+  summary is shorter. The T1/R2 table recomputes the check from its rows.
+- `scripts/r3_losses.py`: why R3 counts a fact as lost (the reader does not read it, or a kept fragment mentions its
+  answer); the mention cases go to a CSV for a person to judge.
+- `scripts/show_checks.py examples` leaves out missing-fact items unless `--design` asks for them, as the tables do.
+- `drybench score` and `signals` print their last progress line ("scored 1870/1872" read as two lost rows); the
+  runners show one progress line per tenth of a step.
+- Colab: the tables show "$" as text, not as LaTeX; the second-reader cell reports the pooled check values of the
+  tables.
+
 ## 1.2.1 (scoring version 11)
 
 Two faults the first v1.2 development run showed, both in synthetic reports. A run of 1.2.0 rescores the answers

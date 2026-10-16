@@ -2,8 +2,9 @@
 
 A simulated response = fact sentences for the required probes + typed filler spans.
 Every span carries a label ("fact" or "filler:<type>") and the fact ids it states, so
-the true minimal response y* (minimum-token subset of spans that still states every
-present fact) and the true filler fraction W* are computable exactly.
+the shortest response that states every present fact (true_filler_fraction) and the
+removable share the guidelines give (planted filler, a summary that repeats the facts
+included: share_error) are computable exactly.
 """
 
 from __future__ import annotations
@@ -203,6 +204,23 @@ def _is_pure_filler(label: str) -> bool:
     return label.startswith("filler:") and label != "filler:summary"
 
 
+def share_error(row: dict, mode: str = "loo") -> float:
+    """Measured − true removable share of a planted response, by characters (v1.2.2). True: the planted filler, a
+    summary that repeats the facts included, and planted wrong statements, as the guidelines say (of two
+    statements of a fact the first stays, and the filler map keeps it). Up to v1.2.1 the truth was the shortest set
+    of fragments that states every fact (true_filler_fraction), which counts the fact sentences as removable
+    whenever the summary is shorter: on real texts, almost always. Rows without fragment texts: the stored shares."""
+    import numpy as np
+
+    texts = row.get("span_texts")
+    if not texts:
+        return float(row[f"{mode}_W"] - row["W_true"])
+    chars = np.array([len(t) for t in texts], float)
+    kept = np.asarray(row[f"{mode}_kept"], bool)
+    true = np.array([lab.startswith("filler:") or lab in ("wrong", "misleading") for lab in row["labels"]])
+    return float((chars[~kept].sum() - chars[true].sum()) / chars.sum()) if chars.sum() else float("nan")
+
+
 def filler_check_metrics(rows: Sequence[dict], mode: str = "loo", n_boot: int = 2000, seed: int = 0) -> dict:
     """Filler-map check pooled over simulated responses (rows written by scripts/pilot_validation.py).
 
@@ -259,8 +277,7 @@ def filler_check_metrics(rows: Sequence[dict], mode: str = "loo", n_boot: int = 
         vals = vals[np.isfinite(vals)]
         return [float(np.quantile(vals, 0.025)), float(np.quantile(vals, 0.975))] if len(vals) else [np.nan, np.nan]
 
-    W = np.array([r[f"{mode}_W"] for r in ok], float)
-    Wt = np.array([r["W_true"] for r in ok], float)
+    err = np.array([share_error(r, mode) for r in ok], float)
     n_filler_spans = sum(b for grp in groups for _, b in grp)
     # why planted filler stayed: deleting it alone already costs more than the tolerance (the reader
     # uses it), or it could go alone but not together with the spans queued before it
@@ -288,6 +305,6 @@ def filler_check_metrics(rows: Sequence[dict], mode: str = "loo", n_boot: int = 
         "recall_by_type": {t: {"removed": a, "planted": b} for t, (a, b) in sorted(by_type.items())},
         "repeats": repeats,
         "repeats_resolved": resolved / repeats if repeats else float("nan"),
-        "W_mae": float(np.mean(np.abs(W - Wt))),
-        "W_bias": float(np.mean(W - Wt)),
+        "W_mae": float(np.nanmean(np.abs(err))),  # removable share by characters vs the planted truth (v1.2.2)
+        "W_bias": float(np.nanmean(err)),
     }

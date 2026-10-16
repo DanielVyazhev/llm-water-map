@@ -105,7 +105,7 @@ def main():
     try:
         from IPython.display import Markdown, display
 
-        display(Markdown((out / "tables_real.md").read_text()))
+        display(Markdown((out / "tables_real.md").read_text().replace("$", r"\$")))  # "$10.00" is not LaTeX
     except ImportError:
         pass
     print(f"\nRun folder: {out}\nArchive: {out}.zip (download it from the Files panel or run the next cell)")
