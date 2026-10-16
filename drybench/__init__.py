@@ -8,7 +8,7 @@ compensation for uncertainty).
 
 from drybench.types import Item, Probe, Span
 
-__version__ = "1.2.3"
+__version__ = "1.2.4"
 # Bump when scoring (or item answer forms) changes: stored scores are recomputed (all of them, or
 # only those drybench.rescore.PARTIAL names for that version).
 SCORING_VERSION = "11"

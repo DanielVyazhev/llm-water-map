@@ -2,6 +2,19 @@
 
 A change of the scoring version makes a resumed run recompute its scores ([running](docs/running.md#rescoring)).
 
+## 1.2.4 (scoring version 11)
+
+Loading only; no score changes (`drybench/backends/hf.py`, `cli.py`, `scripts/probe_models.py`).
+- A vision-language checkpoint (Mistral Small 3.x, Ministral 3, Devstral) loads through its image-text-to-text
+  class and is used for text; a chat template kept in the model folder is used; a template that wants the
+  content as a list of parts gets it.
+- A tokenizer saved by a newer transformers ("TokenizersBackend") loads from its tokenizer.json.
+- `--device-map auto` spreads a model over the visible GPUs; `--quantize 8bit|4bit` loads it with
+  bitsandbytes (for an evaluated model larger than the GPUs).
+- The probe counts the weights transformers loads (not Mistral's consolidated copy), gives each model's origin
+  and the machine (libraries, GPUs), picks how a model fits (one GPU, several, 8 bit) and can only describe a
+  model (`--static`).
+
 ## 1.2.3 (scoring version 11)
 
 No score changes.

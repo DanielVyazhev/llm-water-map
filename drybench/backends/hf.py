@@ -22,15 +22,76 @@ _DTYPES = {"bf16": "bfloat16", "bfloat16": "bfloat16", "fp16": "float16", "float
            "fp32": "float32", "float32": "float32"}
 
 
-def _merge_system(messages: list[dict[str, str]]) -> list[dict[str, str]]:
+def _merge_system(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     if not messages or messages[0]["role"] != "system":
         return messages
     sys_text, rest = messages[0]["content"], [dict(m) for m in messages[1:]]
     if rest and rest[0]["role"] == "user":
-        rest[0]["content"] = sys_text + "\n\n" + rest[0]["content"]
+        if isinstance(sys_text, list):  # lists of parts
+            rest[0]["content"] = sys_text + [{"type": "text", "text": "\n\n"}] + rest[0]["content"]
+        else:
+            rest[0]["content"] = sys_text + "\n\n" + rest[0]["content"]
     else:
         rest.insert(0, {"role": "user", "content": sys_text})
     return rest
+
+
+def _folder_chat_template(path: str) -> str | None:
+    """A local model folder's chat template kept outside the tokenizer config (chat_template.jinja, or
+    chat_template.json as processors write it)."""
+    from pathlib import Path
+
+    folder = Path(path)
+    if (folder / "chat_template.jinja").exists():
+        return (folder / "chat_template.jinja").read_text(encoding="utf-8")
+    if (folder / "chat_template.json").exists():
+        import json
+
+        return json.loads((folder / "chat_template.json").read_text(encoding="utf-8")).get("chat_template")
+    return None
+
+
+def _load_tokenizer(path: str, trust_remote_code: bool = False):
+    """AutoTokenizer; for a folder whose tokenizer config names a class this transformers lacks (one saved by a
+    newer version: "TokenizersBackend"), its tokenizer.json with the config's special tokens and chat template."""
+    from transformers import AutoTokenizer
+
+    try:
+        return AutoTokenizer.from_pretrained(path, trust_remote_code=trust_remote_code)
+    except ValueError as e:
+        from pathlib import Path
+
+        folder = Path(path)
+        if "Tokenizer class" not in str(e) or not (folder / "tokenizer.json").exists():
+            raise
+        import json
+
+        from transformers import PreTrainedTokenizerFast
+
+        cfg_path = folder / "tokenizer_config.json"
+        cfg = json.loads(cfg_path.read_text(encoding="utf-8")) if cfg_path.exists() else {}
+
+        def text(v):
+            return v.get("content") if isinstance(v, dict) else v
+
+        special = {k: text(cfg[k]) for k in ("bos_token", "eos_token", "unk_token", "pad_token") if cfg.get(k)}
+        tok = PreTrainedTokenizerFast(tokenizer_file=str(folder / "tokenizer.json"), **special)
+        if isinstance(cfg.get("chat_template"), str):
+            tok.chat_template = cfg["chat_template"]
+        return tok
+
+
+def _load_model(path: str, kw: dict[str, Any]):
+    """(model, class name): a causal LM, or a vision-language model's image-text-to-text class (used for text)."""
+    import transformers
+
+    try:
+        return transformers.AutoModelForCausalLM.from_pretrained(path, **kw), "AutoModelForCausalLM"
+    except ValueError as e:
+        cls = getattr(transformers, "AutoModelForImageTextToText", None)
+        if cls is None or "Unrecognized configuration class" not in str(e):
+            raise
+        return cls.from_pretrained(path, **kw), "AutoModelForImageTextToText"
 
 
 class HFBackend(LMBackend):
@@ -44,28 +105,53 @@ class HFBackend(LMBackend):
         prepend_bos: bool | None = None,
         trust_remote_code: bool = False,
         chat_template_kwargs: dict[str, Any] | None = None,
+        device_map: str | None = None,
+        quantize: str | None = None,
     ) -> None:
+        """device_map="auto": the model spread over the visible GPUs (a model larger than one GPU; needs accelerate).
+        quantize="8bit" / "4bit": weights quantized with bitsandbytes. A vision-language model (Mistral Small 3.x,
+        Ministral 3) is loaded with its image-text-to-text class and used for text only (v1.2.3)."""
         import torch
         import transformers
-        from transformers import AutoModelForCausalLM, AutoTokenizer
 
         self.torch = torch
         self.name = str(model_name_or_path)
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=trust_remote_code)
+        self.tokenizer = _load_tokenizer(model_name_or_path, trust_remote_code)
+        if not getattr(self.tokenizer, "chat_template", None):  # the template kept apart, as processors keep it
+            folder_template = _folder_chat_template(model_name_or_path)
+            if folder_template:
+                self.tokenizer.chat_template = folder_template
         if dtype == "auto":
             torch_dtype: Any = torch.float32 if self.device == "cpu" else "auto"
         else:
             torch_dtype = getattr(torch, _DTYPES[dtype])
         major, minor = (int(x) for x in transformers.__version__.split(".")[:2])
         dtype_kw = "dtype" if (major, minor) >= (4, 56) else "torch_dtype"
-        self.model = AutoModelForCausalLM.from_pretrained(
-            model_name_or_path, trust_remote_code=trust_remote_code, **{dtype_kw: torch_dtype}
-        ).to(self.device).eval()
+        kw: dict[str, Any] = {dtype_kw: torch_dtype, "trust_remote_code": trust_remote_code}
+        if quantize:
+            if quantize not in ("8bit", "4bit"):
+                raise ValueError("quantize must be '8bit' or '4bit'")
+            from transformers import BitsAndBytesConfig
+
+            kw["quantization_config"] = (BitsAndBytesConfig(load_in_8bit=True) if quantize == "8bit" else
+                                         BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_compute_dtype=torch.bfloat16))
+            device_map = device_map or "auto"
+        if device_map:
+            kw["device_map"] = device_map
+        self.model, self.model_class = _load_model(model_name_or_path, kw)
+        if device_map:  # accelerate placed it: the inputs go where the embeddings are
+            self.device = str(self.model.get_input_embeddings().weight.device)
+        else:
+            self.model = self.model.to(self.device)
+        self.model.eval()
+        self.device_map, self.quantize = device_map, quantize
         self.revision = getattr(self.model.config, "_commit_hash", None)  # the hub commit the weights came from
         self.dropped_generation_config = self._plain_generation_config()
         self.max_batch_tokens = max_batch_tokens
-        cfg_len = getattr(self.model.config, "max_position_embeddings", None) or 4096
+        cfg = self.model.config
+        cfg_len = (getattr(cfg, "max_position_embeddings", None)
+                   or getattr(getattr(cfg, "text_config", None), "max_position_embeddings", None) or 4096)
         self.max_length = max_length or min(int(cfg_len), 32768)
         tok = self.tokenizer
         self.pad_id = tok.pad_token_id if tok.pad_token_id is not None else tok.eos_token_id
@@ -94,7 +180,10 @@ class HFBackend(LMBackend):
     def describe(self) -> dict:
         """What was loaded: name, hub commit, dtype, device, generation settings dropped from the model's config."""
         return {"name": self.name, "revision": self.revision, "dtype": str(self.model.dtype).replace("torch.", ""),
-                "device": self.device, "dropped_generation_config": self.dropped_generation_config}
+                "device": self.device, "dropped_generation_config": self.dropped_generation_config,
+                **({"class": self.model_class} if self.model_class != "AutoModelForCausalLM" else {}),
+                **({"device_map": self.device_map} if self.device_map else {}),
+                **({"quantize": self.quantize} if self.quantize else {})}
 
     # ------------------------------------------------------------------ tokenization
     def encode(self, text: str) -> list[int]:
@@ -134,7 +223,14 @@ class HFBackend(LMBackend):
         try:
             return self.tokenizer.apply_chat_template(messages, **kw)
         except Exception:  # some templates reject the system role
-            return self.tokenizer.apply_chat_template(_merge_system(messages), **kw)
+            try:
+                return self.tokenizer.apply_chat_template(_merge_system(messages), **kw)
+            except Exception:  # vision-language templates want the content as a list of parts
+                parts = [dict(m, content=[{"type": "text", "text": m["content"]}]) for m in messages]
+                try:
+                    return self.tokenizer.apply_chat_template(parts, **kw)
+                except Exception:
+                    return self.tokenizer.apply_chat_template(_merge_system(parts), **kw)
 
     # ------------------------------------------------------------------ forward helpers
     def _forward_last(self, seqs: list[list[int]], n_keep: int):

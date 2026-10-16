@@ -61,6 +61,10 @@ def _backend_args(p: argparse.ArgumentParser, prefix: str = "") -> None:
     p.add_argument(f"{dash}max-batch-tokens", type=int, default=8192)
     p.add_argument(f"{dash}chat-template-kwargs", default=None,
                    help='JSON passed to apply_chat_template, e.g. \'{"enable_thinking": false}\'')
+    p.add_argument(f"{dash}device-map", default=None, choices=["auto"],
+                   help="hf: spread the model over the visible GPUs (a model larger than one GPU)")
+    p.add_argument(f"{dash}quantize", default=None, choices=["8bit", "4bit"],
+                   help="hf: quantize the weights with bitsandbytes (a model larger than the GPUs)")
 
 
 def _make(args: argparse.Namespace, prefix: str = ""):
@@ -72,7 +76,8 @@ def _make(args: argparse.Namespace, prefix: str = ""):
         ctk = getattr(args, f"{key}chat_template_kwargs")
         kw = dict(device=getattr(args, f"{key}device"), dtype=getattr(args, f"{key}dtype"),
                   max_batch_tokens=getattr(args, f"{key}max_batch_tokens"),
-                  chat_template_kwargs=json.loads(ctk) if ctk else None)
+                  chat_template_kwargs=json.loads(ctk) if ctk else None,
+                  device_map=getattr(args, f"{key}device_map", None), quantize=getattr(args, f"{key}quantize", None))
     elif kind == "onnx-gpt2":
         kw = dict(max_batch_tokens=min(getattr(args, f"{key}max_batch_tokens"), 4096))
     return make_backend(kind, path, **kw)

@@ -187,4 +187,116 @@ def test_probe_models_on_a_tiny_chat_model(tmp_path):
     assert rows[0]["loads"] and rows[0]["chat_template"] and "facts_in_text" in rows[0]["answer"]
     assert len(rows[0]["reader"]["p_gold"]) == 2 and len(rows[0]["judge"]["labels"]) == 3
     assert rows[0]["sha256"] and rows[1]["error"].startswith("no config.json")
-    assert "tiny-chat | GPT2LMHeadModel" in r.stdout
+    assert rows[0]["load_mode"] == "one GPU" and rows[0]["machine"]["transformers"] and "this machine:" in r.stdout
+    assert any(line.startswith("tiny-chat |") and "GPT2LMHeadModel" in line for line in r.stdout.splitlines())
+
+
+def _bpe_tokenizer(texts, vocab_size=500):
+    from tokenizers import ByteLevelBPETokenizer
+    from transformers import PreTrainedTokenizerFast
+
+    bpe = ByteLevelBPETokenizer()
+    bpe.train_from_iterator(texts, vocab_size=vocab_size, min_frequency=1, special_tokens=["<|endoftext|>"])
+    return PreTrainedTokenizerFast(tokenizer_object=bpe, eos_token="<|endoftext|>")
+
+
+def test_vision_language_model_is_used_for_text(tmp_path):
+    """v1.2.3: a Mistral 3 checkpoint (image-text-to-text, as Mistral Small 3.x and Ministral 3 ship) loads through
+    its image-text-to-text class and works as a text model; its chat template may sit in the folder and want the
+    content as a list of parts."""
+    tf = pytest.importorskip("transformers")
+    if not hasattr(tf, "Mistral3ForConditionalGeneration"):
+        pytest.skip("no Mistral 3 in this transformers")
+    from transformers import Mistral3Config, Mistral3ForConditionalGeneration, MistralConfig, PixtralVisionConfig
+
+    d = tmp_path / "tiny-mistral3"
+    corpus = [it.document + "\n" + it.request + "\n" + it.gold_minimal for it in generate_items(3, seed=1)]
+    tok = _bpe_tokenizer(corpus + ["needed filler wrong Needed Filler Wrong"])
+    tok.save_pretrained(d)
+    (d / "chat_template.jinja").write_text(
+        "{% for m in messages %}{% if m.content is string %}{{ raise_exception('parts only') }}{% endif %}"
+        "<|{{ m.role }}|>{% for p in m.content %}{{ p.text }}{% endfor %}\n{% endfor %}"
+        "{% if add_generation_prompt %}<|assistant|>{% endif %}")
+    v = len(tok)
+    text = MistralConfig(vocab_size=v + 1, hidden_size=32, intermediate_size=64, num_hidden_layers=2,
+                         num_attention_heads=2, num_key_value_heads=1, head_dim=16, max_position_embeddings=1024,
+                         bos_token_id=tok.eos_token_id, eos_token_id=tok.eos_token_id)
+    vision = PixtralVisionConfig(hidden_size=32, intermediate_size=64, num_hidden_layers=1, num_attention_heads=2,
+                                 image_size=32, patch_size=16, head_dim=16)
+    torch.manual_seed(0)
+    Mistral3ForConditionalGeneration(Mistral3Config(text_config=text, vision_config=vision, image_token_index=v,
+                                                    spatial_merge_size=1)).save_pretrained(d)
+    be = HFBackend(str(d), device="cpu", max_batch_tokens=64)
+    assert be.model_class == "AutoModelForImageTextToText" and be.describe()["class"] == "AutoModelForImageTextToText"
+    assert be.max_length == 1024 and be.has_chat_template
+    ctx = be.format_chat([{"role": "system", "content": "Answer."}, {"role": "user", "content": "Who?"}])
+    assert ctx.startswith("<|system|>Answer.") and ctx.endswith("<|assistant|>")
+    lp = be.choice_logprobs([ctx], ["needed", "filler", "wrong"])
+    assert lp.shape == (1, 3) and np.isfinite(lp).all()
+    out = be.generate_batch_info([ctx], max_new_tokens=5)[0]
+    assert out["n_tokens"] >= 1
+
+
+def test_device_map_auto_places_the_model(tiny_model_dir):
+    """v1.2.3: device_map="auto" (a model spread over several GPUs) puts the inputs where the embeddings are."""
+    pytest.importorskip("accelerate")
+    be = HFBackend(str(tiny_model_dir), device_map="auto", max_batch_tokens=64)
+    assert be.device == str(be.model.get_input_embeddings().weight.device) and be.describe()["device_map"] == "auto"
+    assert np.isfinite(be.continuation_logprobs([("Shipment KR-4417 was handled by", " Dunmar")])).all()
+
+
+def test_probe_sizes_and_load_modes(tmp_path):
+    """v1.2.3: the probe counts the weights transformers loads, not Mistral's second copy, and says how a model
+    fits: one GPU, several GPUs, 8-bit weights, or not."""
+    import importlib.util
+    import json
+    from pathlib import Path
+
+    spec = importlib.util.spec_from_file_location("probe", Path(__file__).resolve().parents[1] / "scripts" / "probe_models.py")
+    probe = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(probe)
+    d = tmp_path / "m"
+    d.mkdir()
+    (d / "config.json").write_text(json.dumps({"architectures": ["MistralForCausalLM"], "torch_dtype": "float32",
+                                              "_name_or_path": "org/model"}))
+    for name in ("model-00001-of-00002.safetensors", "model-00002-of-00002.safetensors", "consolidated.safetensors"):
+        (d / name).write_bytes(b"0" * 10)
+    (d / "model.safetensors.index.json").write_text(json.dumps({"weight_map": {
+        "a": "model-00001-of-00002.safetensors", "b": "model-00002-of-00002.safetensors"}}))
+    assert [f.name for f in probe.weight_files(d)] == ["model-00001-of-00002.safetensors",
+                                                       "model-00002-of-00002.safetensors"]
+    w = probe.weights(d)
+    assert w["origin"] == "org/model" and w["second_copy"] and w["stored_dtype"] == "float32"
+    one = {"gpus": [["A100", 42.4]], "accelerate": "1", "bitsandbytes": None}
+    assert probe.load_mode({"bf16_gb": 28.0}, one)[0] is None
+    assert probe.load_mode({"bf16_gb": 44.5}, one)[0] == "no"
+    assert probe.load_mode({"bf16_gb": 44.5}, {**one, "gpus": [["A100", 42.4]] * 2})[0] == "auto"
+    assert probe.load_mode({"bf16_gb": 44.5}, {**one, "bitsandbytes": "0.45"})[0] == "8bit"
+
+
+def test_tokenizer_saved_by_a_newer_transformers(tiny_model_dir, tmp_path, monkeypatch):
+    """v1.2.3: a tokenizer config naming a class this transformers lacks (a folder saved by transformers 5 and read
+    by 4.x: "Tokenizer class TokenizersBackend does not exist") falls back to its tokenizer.json with the config's
+    special tokens."""
+    import json
+    import shutil
+
+    import transformers
+
+    d = tmp_path / "newer"
+    shutil.copytree(tiny_model_dir, d)
+    cfg = json.loads((d / "tokenizer_config.json").read_text())
+    cfg.update(tokenizer_class="TokenizersBackend", eos_token={"content": "<|endoftext|>", "special": True})
+    (d / "tokenizer_config.json").write_text(json.dumps(cfg))
+    ref = HFBackend(str(tiny_model_dir), device="cpu", max_batch_tokens=64)
+    plain = transformers.AutoTokenizer.from_pretrained
+
+    def older(path, *a, **k):
+        if str(path) == str(d):
+            raise ValueError("Tokenizer class TokenizersBackend does not exist or is not currently imported.")
+        return plain(path, *a, **k)
+
+    monkeypatch.setattr(transformers.AutoTokenizer, "from_pretrained", older)
+    be = HFBackend(str(d), device="cpu", max_batch_tokens=64)
+    text = "Shipment KR-4417 was handled by Dunmar Freight."
+    assert be.encode(text) == ref.encode(text) and be.tokenizer.eos_token == "<|endoftext|>"

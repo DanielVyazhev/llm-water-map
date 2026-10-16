@@ -1,16 +1,17 @@
 # Filler in LLM answers — which of this machine's models the benchmark can use, and in which role (a server with
-# local models; ~2–5 min per model). For every folder in MODELS: does it load, does it answer a report request in
-# plain text with the facts, does it read the facts of a gold answer (reader), does it label an opener and the facts
-# right (judge), how much GPU memory it takes. Nothing is downloaded or installed: the models are local folders and
-# the package (v__VERSION__) runs from its folder with this machine's libraries (numpy, pandas, scipy, torch,
-# transformers). Writes OUT (one JSON line per model) and prints a table. The package is embedded as PKG_B64
-# (notebook: the hidden cell "Package").
+# local models; ~2–5 min per model). For every folder in MODELS: does it load (on one GPU, over several, or with
+# 8-bit weights), does it answer a report request in plain text with the facts, does it read the facts of a gold
+# answer (reader), does it label an opener and the facts right (judge), how much GPU memory it takes. Nothing is
+# downloaded or installed: the models are local folders and the package (v__VERSION__) runs from its folder with
+# this machine's libraries (numpy, pandas, scipy, torch, transformers). Writes OUT (one JSON line per model) and
+# prints a table. The package is embedded as PKG_B64 (notebook: the hidden cell "Package").
 
 # ---- settings ----
 MODELS = []                          # local model folders
 SHA256 = []                          # folders whose weight files to hash (the main reader: to compare with the hub)
+STATIC = []                          # folders of MODELS only to describe from their config, not to load
 DTYPE = "bf16"
-GPU = None                           # a machine with several GPUs: the one to use, e.g. "1"
+GPU = None                           # None: every GPU (a large model may be spread over them); "1": that one
 OUT = "~/drybench_probe.jsonl"
 # ---- end settings ----
 
@@ -48,6 +49,8 @@ def main():
     cmd = [sys.executable, str(pkg / "scripts" / "probe_models.py"), *MODELS, "--out", str(out), "--dtype", DTYPE]
     for path in SHA256:
         cmd += ["--sha256", path]
+    for path in STATIC:
+        cmd += ["--static", path]
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=ENV)
     for line in p.stdout:
         print(line, end="", flush=True)

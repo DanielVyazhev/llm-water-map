@@ -1,4 +1,4 @@
-# Protocol of the confirmation run (package v1.2.3)
+# Protocol of the confirmation run (package v1.2.4)
 
 ## Development and confirmation
 
@@ -14,12 +14,12 @@ flowchart LR
   `real_t4_n15` (SQuAD 2.0, MuSiQue, CUAD, Poddar et al.; 15 items per cell); models Qwen2.5-0.5B/1.5B-Instruct and
   SmolLM2-1.7B-Instruct; readers Qwen2.5-3B-Instruct and Phi-3.5-mini-instruct; Poddar et al.'s 189
   human-labelled responses; 600 missing-fact answers labelled while the abstention rule was built.
-- v1.2 (the same design after review; scored by package v1.2.1, scoring version 11, which v1.2.3 keeps):
+- v1.2 (the same design after review; scored by package v1.2.1, scoring version 11, which v1.2.4 keeps):
   `t4_n20_v12`, `real_t4_n15_v12` on a T4, then the LLM judge (Phi-4) and Selective Context (Qwen2.5-3B) on both on
   an A100 (`colab/dev_baselines_a100.ipynb`). Its values of the confirmatory statistics go into this file before
   the confirmation run.
 
-**Confirmation run.** `colab/final_a100.ipynb` or `scripts/run_final.py`, package v1.2.3:
+**Confirmation run.** `colab/final_a100.ipynb` or `scripts/run_final.py`, package v1.2.4:
 - synthetic reports: new items (seed 1, 30 per cell, 450 items); planted-filler check T1 on items of seed 2027
   (development: 2026), 5 per cell;
 - real texts: SQuAD 2.0, MuSiQue (MuSiQue-Full required), CUAD; 30 items per cell, built only from source texts the
