@@ -2,8 +2,10 @@
 reader's filler map, Holm-adjusted.
 
 H1  T1, R3      validity of the deletions on planted filler, on the responses with a filler map: a requested
-                fact lost in fewer than 5% of them, and more than 95% of the deleted fragments planted filler or
-                planted wrong statements (intersection-union test: p is the larger of the two p-values).
+                fact lost in fewer of them than a threshold, and more of the deleted fragments planted filler or
+                planted wrong statements than a threshold (intersection-union test: p is the larger of the two
+                p-values). T1: 5% and 0.95. R3: 15% and 0.85, the main reader's development 95% CI bounds (9.2%
+                [4.7%, 14.3%], 0.935 [0.900, 0.969]) rounded outward to multiples of 5 points and 0.05.
 H2  T1, R3, HL  the filler map ranks responses by filler better than length: pairwise accuracy (pairs whose true
                 removable share differs by ≥ 0.2; ties count half) of the filler map minus that of length > 0.
 H3  T1, R3, HL  the same with Spearman's correlation with the true removable share.
@@ -27,8 +29,9 @@ import pandas as pd
 ALPHA = 0.05
 N_BOOT = 2000
 MIN_GAP = 0.2
-MAX_LOST = 0.05       # H1: share of responses with a lost fact
-MIN_PRECISION = 0.95  # H1: share of deleted fragments that are planted filler or wrong
+# H1, per truth set: (share of responses with a lost fact below, share of deleted fragments that are planted filler
+# or wrong above)
+H1_NULLS = {"T1": (0.05, 0.95), "R3": (0.15, 0.85)}
 TESTS = [("H1", "T1"), ("H1", "R3"), ("H2", "T1"), ("H2", "R3"), ("H2", "HL"), ("H3", "T1"), ("H3", "R3"),
          ("H3", "HL")]
 SETS = {"T1": "planted filler, synthetic reports", "R3": "planted filler, real texts",
@@ -75,10 +78,14 @@ def holm(p: Sequence[float]) -> list[float]:
 
 # ---------------------------------------------------------------- H1
 
-def validity(rows: Sequence[dict], n_boot: int = N_BOOT, seed: int = 0) -> dict:
-    """H1 on the rows of a planted-filler check (rows.jsonl of filler_check or filler_check_real)."""
+def validity(rows: Sequence[dict], n_boot: int = N_BOOT, seed: int = 0, nulls: tuple[float, float] = H1_NULLS["T1"]
+             ) -> dict:
+    """H1 on the rows of a planted-filler check (rows.jsonl of filler_check or filler_check_real); nulls = (largest
+    share of responses with a lost fact, smallest precision) that the hypothesis must beat."""
+    max_lost, min_precision = nulls
     ok = [r for r in rows if r.get("loo_status") == "ok"]
-    out: dict = {"built": len(rows), "with_map": len(ok), "items": len({r["item_id"] for r in ok})}
+    out: dict = {"built": len(rows), "with_map": len(ok), "items": len({r["item_id"] for r in ok}),
+                 "max_lost": max_lost, "min_precision": min_precision}
     if not ok:
         return out
     lost = np.array([r["loo_safety"] < 1.0 for r in ok], float)
@@ -88,9 +95,9 @@ def validity(rows: Sequence[dict], n_boot: int = N_BOOT, seed: int = 0) -> dict:
     for idx in resamples([r["item_id"] for r in ok], n_boot, seed):
         b_lost.append(lost[idx].mean())
         b_prec.append(right[idx].sum() / removed[idx].sum() if removed[idx].sum() else np.nan)
-    out.update({"lost": float(lost.mean()), "lost_ci": ci(b_lost), "p_lost": p_value(b_lost, MAX_LOST, greater=False),
+    out.update({"lost": float(lost.mean()), "lost_ci": ci(b_lost), "p_lost": p_value(b_lost, max_lost, greater=False),
                 "precision": float(right.sum() / removed.sum()) if removed.sum() else float("nan"),
-                "precision_ci": ci(b_prec), "p_precision": p_value(b_prec, MIN_PRECISION),
+                "precision_ci": ci(b_prec), "p_precision": p_value(b_prec, min_precision),
                 "deleted": int(removed.sum())})
     out["p"] = max(out["p_lost"], out["p_precision"])
     return out
@@ -150,10 +157,12 @@ def confirm(synthetic: str | Path | None = None, real: str | Path | None = None,
     parts: dict = {}
     if synthetic is not None and (Path(synthetic) / "filler_check" / "rows.jsonl").exists():
         rows, cases = planted(Path(synthetic), "planted_synthetic")
-        parts["T1"] = {"H1": validity(rows, n_boot, seed), "H2": ranking(cases, n_boot=n_boot, seed=seed)}
+        parts["T1"] = {"H1": validity(rows, n_boot, seed, H1_NULLS["T1"]),
+                       "H2": ranking(cases, n_boot=n_boot, seed=seed)}
     if real is not None and (Path(real) / "filler_check_real" / "rows.jsonl").exists():
         rows, cases = planted(Path(real), "planted_real")
-        parts["R3"] = {"H1": validity(rows, n_boot, seed), "H2": ranking(cases, n_boot=n_boot, seed=seed)}
+        parts["R3"] = {"H1": validity(rows, n_boot, seed, H1_NULLS["R3"]),
+                       "H2": ranking(cases, n_boot=n_boot, seed=seed)}
     if annotation is not None and label_files:
         from drybench.annotate import labelled_cases
 
@@ -169,8 +178,9 @@ def confirm(synthetic: str | Path | None = None, real: str | Path | None = None,
                    f"[{_num(v.get('precision_ci', (np.nan,) * 2)[0], '.3f')}, "
                    f"{_num(v.get('precision_ci', (np.nan,) * 2)[1], '.3f')}]") if v.get("with_map") else "–"
             n = f"{v.get('with_map', 0)} of {v.get('built', 0)} responses, {v.get('items', 0)} items" if v else "–"
-            out[f"{h} {s}"] = {"truth set": SETS[s], "hypothesis": f"lost < {MAX_LOST:.0%} and precision > "
-                               f"{MIN_PRECISION:.2f}", "data": n, "estimate [95% CI]": est,
+            max_lost, min_precision = H1_NULLS[s]
+            out[f"{h} {s}"] = {"truth set": SETS[s], "hypothesis": f"lost < {max_lost:.0%} and precision > "
+                               f"{min_precision:.2f}", "data": n, "estimate [95% CI]": est,
                                "p": v.get("p", np.nan)}
         else:
             v = part.get("H2") or {}

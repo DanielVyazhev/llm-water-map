@@ -689,7 +689,9 @@ def test_dev_baselines_cell_on_a_server(cuad_file, poddar_file, tmp_path):
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     settings = (f'SYN_RUN = "syn_dev"\nREAL_RUN = "real_dev"\nJUDGES = {{"mock": "{models / "judge"}"}}\n'
-                f'SELECTIVE = {{"mock": "{models / "small"}"}}\nPODDAR_DATA = None\nDTYPE = "fp32"\n'
+                f'SELECTIVE = {{"mock": "Qwen/Qwen2.5-3B-Instruct"}}\nREADER = "Qwen/Qwen2.5-3B-Instruct"\n'
+                f'COMPARE_N = 3\nCOMPARE_DTYPES = ["fp32"]\n'
+                f'LOCAL = {{"Qwen/Qwen2.5-3B-Instruct": "{models / "small"}"}}\nPODDAR_DATA = None\nDTYPE = "fp32"\n'
                 f'MAX_BATCH_TOKENS = 4096\nBACKEND = "mock"\nZIP_NAME = "dev_test"\nUSE_DRIVE = False\n'
                 f'RUN_ROOT = "{root}"\nGPU = None\nPIP = False\n')
     work = tmp_path / "work"
@@ -711,3 +713,9 @@ def test_dev_baselines_cell_on_a_server(cuad_file, poddar_file, tmp_path):
 
     names = zipfile.ZipFile(root / "dev_test.zip").namelist()
     assert "dev_test_confirmatory.md" in names and any(n.startswith("real_dev/baselines/") for n in names)
+    # v1.2.5: the main reader against the runs' scores (the mock reader scores as it did)
+    assert "reader_equivalence/summary.md" in names
+    summary = json.loads((root / "reader_equivalence" / "summary.json").read_text())
+    for run_name in ("syn_dev", "real_dev"):
+        s = summary["runs"][run_name]["fp32"]
+        assert s["responses"] == 3 and s["same_status"] == 3 and s["same_kept"] == s["with_map_in_both"]

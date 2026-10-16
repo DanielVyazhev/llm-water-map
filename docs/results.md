@@ -10,7 +10,9 @@ on missing-fact items). On real texts v1.0.0 did not credit part of the correct 
 completeness, kinds of deleted fragments, segmentation), SQuAD 2.0 items, the truth of R3 and R4, and decoding
 (plain greedy): the development runs are redone with v1.2.0 (`t4_n20_v12`, `real_t4_n15_v12`, plus the LLM judge
 and Selective Context) and replace the numbers below. Comparison rows (pairwise accuracy, fragment ROC-AUC) are
-computed with v1.2.0's comparison code on these v1.0.0 scores.
+computed with v1.2.0's comparison code on these v1.0.0 scores. The v1.2 runs are made (scored by v1.2.1); their
+values of the confirmatory statistics and why R3 loses facts are in [PROTOCOL.md](PROTOCOL.md); this
+page is redone once the judge and Selective Context have run on them.
 
 | | Synthetic | Real texts |
 |---|---|---|
@@ -220,6 +222,6 @@ own answer). Known misses that v1.1.0 still does not credit: a response shorter 
   works, not that the reader beats simpler methods.
 - The second reader reverses the SQuAD ranking of model × prompt; the wrong-statement label is less stable between
   readers than the removable share.
-- Models up to 1.7B and readers of 3–4B so far; the confirmation run adds models up to 14B and Phi-4 as a reader.
+- Models up to 1.7B and readers of 3–4B so far; the confirmation run has models of 3–14B and a 14B reader.
 - Scope: answers with checkable facts (QA, retrieval, extraction). Reasoning, open-ended explanations and code are
   not covered.

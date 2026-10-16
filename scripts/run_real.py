@@ -319,8 +319,9 @@ def missing_checks(out: Path, readers: dict, backend: str, dtype: str, extra: li
 
 
 def free_model_cache(model_id: str, keep: set) -> None:
-    """Delete a model's Hugging Face download (not one of `keep`: readers and judges are used again)."""
-    if model_id in keep or "/" not in model_id:
+    """Delete a model's Hugging Face download (not one of `keep`: readers and judges are used again; never a local
+    model folder)."""
+    if model_id in keep or "/" not in model_id or Path(model_id).expanduser().is_dir():
         return
     try:
         from huggingface_hub import scan_cache_dir
@@ -386,6 +387,8 @@ def main() -> None:
     ap.add_argument("--missing-check", action="store_true", help="how each reader reads a missing fact")
     ap.add_argument("--variants", nargs="+", default=["default", "concise"], choices=["default", "concise"])
     ap.add_argument("--dtype", default="bf16", help="bf16 on A100/H100; fp16 on T4/V100")
+    ap.add_argument("--reader-dtype", default=None,
+                    help="the main reader's dtype (default: --dtype); the development runs read in fp16")
     ap.add_argument("--batch-size", type=int, default=32)
     ap.add_argument("--max-new-tokens", type=int, default=400)
     ap.add_argument("--reader-max-batch-tokens", type=int, default=8192)
@@ -425,6 +428,7 @@ def main() -> None:
     if not gpu and not args.allow_cpu and args.backend == "hf":
         raise SystemExit("No GPU visible to torch (check CUDA_VISIBLE_DEVICES); --allow-cpu to force.")
     dtype = args.dtype if gpu else "auto"
+    rdtype = (args.reader_dtype or args.dtype) if gpu else "auto"  # the main reader
     models = model_map(args.models)
     if args.readers2 is not None:
         extra = label_map(args.readers2)
@@ -502,7 +506,7 @@ def main() -> None:
             print("    scoring changed since the items were filtered: re-checking the rest of the pools")
         run(CLI + ["filter-items", "--items", *pools, "--out", items, "--report", report,
                    "--n-per-cell", args.n_per_cell, "--max-prior", args.max_prior, "--min-gold-p", args.min_gold_p,
-                   "--reader-backend", args.backend, "--reader", args.reader, "--reader-dtype", dtype,
+                   "--reader-backend", args.backend, "--reader", args.reader, "--reader-dtype", rdtype,
                    "--reader-max-batch-tokens", args.reader_max_batch_tokens] + (["--keep", items] if stale else [])
             + (["--exclude-items", *args.exclude_items] if args.exclude_items else []))
     print(f"    {sum(1 for _ in open(items))} items")
@@ -511,9 +515,9 @@ def main() -> None:
           "real-text responses with planted filler, human span labels")
     if not (out / "reader_check.json").exists():
         run(CLI + ["check-reader", "--items", items, "--reader-backend", args.backend, "--reader", args.reader,
-                   "--reader-dtype", dtype, "--n", 40, "--out", out / "reader_check.json"])
-    filler_check(args, args.reader, out / "filler_check", dtype)
-    real_checks(args, args.reader, out, items, poddar, dtype)
+                   "--reader-dtype", rdtype, "--n", 40, "--out", out / "reader_check.json"])
+    filler_check(args, args.reader, out / "filler_check", rdtype)
+    real_checks(args, args.reader, out, items, poddar, rdtype)
 
     print("\n[4/8] responses + entropy signals")
     for label, model_id in models.items():
@@ -528,7 +532,7 @@ def main() -> None:
 
     print("\n[5/8] scores")
     run(CLI + ["score", "--items", items, "--responses", resp, "--out", scored, "--reader-backend", args.backend,
-               "--reader", args.reader, "--reader-dtype", dtype,
+               "--reader", args.reader, "--reader-dtype", rdtype,
                "--reader-max-batch-tokens", args.reader_max_batch_tokens, "--mode", "loo", "--ablation-abs-tol", 2.0])
 
     subs = [out]
@@ -556,7 +560,8 @@ def main() -> None:
         subs.append(r2)
     if args.missing_check:
         print("\n[6/8] how each reader reads a missing fact")
-        missing_checks(out, {"main": args.reader, **extra}, args.backend, dtype)
+        missing_checks(out, {"main": args.reader}, args.backend, rdtype)
+        missing_checks(out, extra, args.backend, dtype)
     if judges or selective:
         print("\n[6/8] baselines: LLM judge and Selective Context on the checks' responses")
         sets = ["planted_real"] + (["human_poddar"] if poddar is not None and args.human_check else [])

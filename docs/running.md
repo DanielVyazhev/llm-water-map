@@ -4,7 +4,7 @@
 
 ```bash
 pip install -e ".[hf,plot,dev]"      # add ".[onnx]" for the CPU GPT-2 pilot
-python -m pytest -q                    # 194 tests (3 skip without local data); mock reader, no GPU
+python -m pytest -q                    # 214 tests (3 skip without local data); mock reader, no GPU
 ```
 
 Runs with real models need a GPU.
@@ -37,29 +37,45 @@ the notebooks after code changes.
 | `colab/drybench_colab.ipynb` | synthetic reports: 3 models × 2 prompts; second reader in its own cell | T4, ~50 min for 300 items; second reader ~45 min |
 | `colab/real_texts_colab.ipynb` | SQuAD 2.0, MuSiQue, CUAD, Poddar et al.; checks R1–R6 | T4, ~3 h; resumes from Google Drive |
 | `colab/missing_check_colab.ipynb` | ways to ask a reader about a missing fact | T4, ~15 min |
-| `colab/dev_baselines_a100.ipynb` | LLM judge (Phi-4) and Selective Context on both development runs; development values of the confirmatory tests | A100, 1–2 h |
-| `colab/final_a100.ipynb` | confirmation run ([PROTOCOL.md](PROTOCOL.md)) | A100, 8–12 h; HF token with Llama and Gemma access |
+| `colab/dev_baselines_a100.ipynb` | on the confirmation run's machine: the local models described, the main reader against both development runs' scores, the LLM judge (Qwen2.5-14B) and Selective Context on both runs; development values of the confirmatory tests | A100, 1–2 h |
+| `colab/final_a100.ipynb` | confirmation run ([PROTOCOL.md](PROTOCOL.md)) | A100 40 GB, 6–10 h |
 
 ## A server with local models
 
-`colab/probe_models.ipynb` (or `python scripts/probe_models.py DIR [DIR ...]`): for each local model folder, whether
-it loads, answers a report request in plain text, reads the facts of a gold answer and labels fragments as a
-judge, and the GPU memory it takes; nothing is downloaded or installed. `colab/dev_baselines_a100.ipynb` runs
-there with `USE_DRIVE = False`, local model folders and `PIP = False`.
+The notebooks run outside Colab too (Jupyter on the server): `USE_DRIVE = False`, `RUN_ROOT` (the runs and
+`data/`), `LOCAL` (Hugging Face id → local model folder; with every model local nothing is fetched from the hub),
+`PIP = False` (nothing installed: the package runs from its folder with the server's numpy, pandas, scipy, torch,
+transformers), `GPU`.
+
+1. `colab/probe_models.ipynb` (or `python scripts/probe_models.py DIR [DIR ...]`): for each local model folder,
+   whether it loads, answers a report request in plain text, reads the facts of a gold answer and labels fragments
+   as a judge, and the GPU memory it takes.
+2. Copy into `RUN_ROOT`: both development runs (`t4_n20_v12/`, `real_t4_n15_v12/`) and `data/squad2`,
+   `data/musique`, `data/cuad` (the files the development runs used; the confirmation run checks their sha256).
+3. `colab/dev_baselines_a100.ipynb` → `RUN_ROOT/dev_v12_results.zip`: `models.jsonl` (each local folder's origin
+   and size), `reader_equivalence/summary.md` (`scripts/compare_reader.py`: 40 responses per run scored again by
+   the main reader in fp16 and bf16, against the development scores), the judge and Selective Context in both
+   runs, their tables, the development values.
+4. `colab/final_a100.ipynb`: the confirmation run, `RUN_ROOT/final_v1`.
 
 ## GPU server
 
 ```bash
 python -m pip install -e ".[hf,data,plot]"
 python scripts/run_synthetic.py --run runs/syn_v1 --n-per-cell 30 --seed 1 --models qwen2.5-7b=Qwen/Qwen2.5-7B-Instruct \
-    --readers2 phi3.5-mini=microsoft/Phi-3.5-mini-instruct --judges phi-4=microsoft/phi-4 \
+    --readers2 phi3.5-mini=microsoft/Phi-3.5-mini-instruct --judges qwen2.5-14b=Qwen/Qwen2.5-14B-Instruct \
     --selective qwen2.5-3b=Qwen/Qwen2.5-3B-Instruct --missing-check
 python scripts/run_real.py --run runs/real_v1                          # 4 models up to 7B by default
 python scripts/run_real.py --run runs/cuad_only --suites cuad --n-per-cell 30
 python scripts/run_final.py --print-hash                              # version and code hash (PROTOCOL.md)
 python scripts/run_final.py --run runs/final_v1 \
     --dev-items results/dev_v1.0/real/items.jsonl runs/real_t4_n15_v12/items.jsonl   # confirmation run
+python scripts/compare_reader.py runs/t4_n20_v12 runs/real_t4_n15_v12 --reader /models/Qwen2.5-3B-Instruct \
+    --dtype fp16 bf16                                                 # a reader against a run's scores
 ```
+
+`run_final.py` takes local model folders in place of Hugging Face ids (`--models llama3.2-3b=/models/...`); when
+every model is one, nothing is fetched from the hub and the datasets must already be in `--data`.
 
 Single steps:
 
@@ -115,9 +131,9 @@ SQuAD 2.0 items and decoding, so the development runs are made again under new n
 
 1. `colab/drybench_colab.ipynb`, `RUN_NAME = "t4_n20_v12"` (the default), then its second-reader cell.
 2. `colab/real_texts_colab.ipynb`, `RUN_NAME = "real_t4_n15_v12"` (the default).
-3. `colab/dev_baselines_a100.ipynb` on an A100: the judge and Selective Context on both runs, the tables again, the
-   development values of the confirmatory tests, everything in `dev_v12_results.zip`. On a server instead of
-   Colab: both run folders copied into `RUN_ROOT`, `USE_DRIVE = False`, models as local folders, `PIP = False`.
+3. `colab/dev_baselines_a100.ipynb` on the confirmation run's machine (a server: [above](#a-server-with-local-models)):
+   the main reader against the runs' scores, the judge and Selective Context on both runs, the tables again, the
+   development values of the confirmatory tests, everything in `dev_v12_results.zip`.
 4. Compare with `results/dev_v1.0`; check `added_answers` in `scored.jsonl`, above all wordings with a comma, a
    bracket, "not" or "or" before the answer, and very short ones.
 5. The development values and the thresholds of H1 into
@@ -126,6 +142,7 @@ SQuAD 2.0 items and decoding, so the development runs are made again under new n
    the responses): the truth stays strict; the thresholds are the main reader's development 95% CI bounds rounded
    outward, the share of responses with a lost fact up to a multiple of 5 points and the precision down to a
    multiple of 0.05; the confirmation run's R3 has 8 items per cell instead of 4. H1 on T1 keeps 5% and 0.95.
+   Applied in v1.2.5: [4.7%, 14.3%] → 15%, [0.8996, 0.969] → 0.85 (`drybench.confirm.H1_NULLS`).
 
 ## Looking inside a run
 

@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from drybench.confirm import TESTS, confirm, holm, markdown, p_value, ranking, validity
+from drybench.confirm import H1_NULLS, TESTS, confirm, holm, markdown, p_value, ranking, validity
 
 
 def test_holm_and_bootstrap_p():
@@ -60,6 +60,18 @@ def test_validity_and_ranking_on_planted_rows(tmp_path):
     r = ranking(fill_unscored(cases, ["map:main"]), n_boot=300)
     # the map deletes exactly the planted filler; length grows with it too, so both rank well: the map at least as well
     assert r["acc_map"] == pytest.approx(1.0) and r["acc_diff"] >= 0 and r["responses"] == 80
+
+
+def test_h1_thresholds_per_truth_set():
+    """T1: 5% and 0.95; R3: 15% and 0.85 (the development CI bounds rounded outward)."""
+    rows = _rows(40, lose_every=10)  # a fact lost in 10% of the responses, precision 0.94
+    t1 = validity(rows, n_boot=300, nulls=H1_NULLS["T1"])
+    r3 = validity(rows, n_boot=300, nulls=H1_NULLS["R3"])
+    assert t1["lost"] == pytest.approx(0.1) and t1["p"] > 0.5 and r3["p"] < 0.05
+    assert (r3["max_lost"], r3["min_precision"]) == (0.15, 0.85)
+    t, _ = confirm(n_boot=10)
+    assert t.loc["H1 T1", "hypothesis"] == "lost < 5% and precision > 0.95"
+    assert t.loc["H1 R3", "hypothesis"] == "lost < 15% and precision > 0.85"
 
 
 def test_confirm_reports_eight_tests_and_holm(tmp_path):

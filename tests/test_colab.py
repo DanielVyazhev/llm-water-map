@@ -107,10 +107,12 @@ def test_dev_cell_reads_local_models_without_the_hub(tmp_path):
         ns["ENV"].pop(key, None)
     (tmp_path / "judge").mkdir()
     (tmp_path / "small").mkdir()
-    ns["JUDGES"], ns["SELECTIVE"] = {"j": str(tmp_path / "judge")}, {"s": str(tmp_path / "small")}
+    # v1.2.5: the judge, Selective Context and the main reader (compared with the runs' scores) by LOCAL
+    ns["LOCAL"] = {"Qwen/Qwen2.5-14B-Instruct": str(tmp_path / "judge"),
+                   "Qwen/Qwen2.5-3B-Instruct": str(tmp_path / "small")}
     ns["local_models"]()
     assert ns["ENV"]["HF_HUB_OFFLINE"] == "1" and ns["ENV"]["TRANSFORMERS_OFFLINE"] == "1"
     ns["ENV"].pop("HF_HUB_OFFLINE")
-    ns["SELECTIVE"] = {"s": "Qwen/Qwen2.5-3B-Instruct"}  # a hub id: the hub stays on
+    ns["LOCAL"] = {"Qwen/Qwen2.5-14B-Instruct": str(tmp_path / "judge")}  # the 3B by hub id: the hub stays on
     ns["local_models"]()
     assert "HF_HUB_OFFLINE" not in ns["ENV"]

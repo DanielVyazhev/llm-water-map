@@ -1,45 +1,49 @@
-# Filler in LLM answers — the confirmation run for the paper (Colab A100, package v__VERSION__)
-# 1) Runtime → Change runtime type → A100 GPU (High-RAM).   2) Colab secrets: HF_TOKEN with access to
-#    meta-llama/Llama-3.1-8B-Instruct and google/gemma-2-9b-it (or drop them from MODELS).   3) Run this cell.
-# Both suites (synthetic reports, real texts), 7 models × 2 prompts, three readers, every check where the truth is
-# known, the LLM judge and Selective Context, and the two samples for human labels. With the defaults about 8–12 h
-# on an A100. The run lives in Google Drive: after a disconnect, rerun the cell; it resumes. The code is frozen: the
-# run records the package version and a hash of its code in protocol.json and refuses other code or settings.
+# Filler in LLM answers — the confirmation run for the paper (an A100 server or Colab A100, package v__VERSION__)
+# Both suites (synthetic reports, real texts), 3 models × 2 prompts, three readers, every check where the truth is
+# known, the LLM judge and Selective Context, and the two samples for human labels; about 6–10 h on one A100 40 GB.
+# Rerunning the cell resumes. The code is frozen: the run records the package version and a hash of its code in
+# protocol.json and refuses other code or settings (docs/PROTOCOL.md).
+# A server: RUN_ROOT holds the development run real_t4_n15_v12 and the datasets (data/squad2, data/musique,
+# data/cuad); LOCAL maps every model to its folder, and then nothing is downloaded; PIP = False installs nothing (the
+# package runs from its folder with the machine's numpy, pandas, scipy, torch, transformers).
+# Colab: USE_DRIVE = True, PIP = True, LOCAL = {}, FREE_MODEL_CACHE = True, HF_TOKEN in the Colab secrets (Llama).
 # The package is embedded as PKG_B64 (notebook: the hidden cell "Package"); nothing to upload.
 
 # ---- settings ----
 RUN_NAME = "final_v1"                # new name = fresh run; same name = resume
-# items of the v1.2 development run on real texts: their source texts are left out (the v1.0 items come with
-# the package: results/dev_v1.0/real/items.jsonl)
-DEV_ITEMS = ["/content/drive/MyDrive/drybench_runs/real_t4_n15_v12/items.jsonl"]
+RUN_ROOT = "~/drybench_runs"         # the run, the development run and data/ (USE_DRIVE: drybench_runs in Drive)
+USE_DRIVE = False                    # Colab: True keeps everything in Google Drive (survives disconnects)
+# items of the v1.2 development run on real texts, in RUN_ROOT: their source texts are left out (the v1.0 items
+# come with the package: results/dev_v1.0/real/items.jsonl)
+DEV_ITEMS = ["real_t4_n15_v12/items.jsonl"]
 MODELS = {                           # label: Hugging Face id of an evaluated (instruct) model
-    "qwen2.5-0.5b": "Qwen/Qwen2.5-0.5B-Instruct",       # the development models
-    "qwen2.5-1.5b": "Qwen/Qwen2.5-1.5B-Instruct",
-    "smollm2-1.7b": "HuggingFaceTB/SmolLM2-1.7B-Instruct",
-    "qwen2.5-7b": "Qwen/Qwen2.5-7B-Instruct",           # one family across sizes
+    "llama3.2-3b": "meta-llama/Llama-3.2-3B-Instruct",
+    "phi4-mini": "microsoft/Phi-4-mini-instruct",
     "qwen2.5-14b": "Qwen/Qwen2.5-14B-Instruct",
-    "llama3.1-8b": "meta-llama/Llama-3.1-8B-Instruct",  # gated
-    "gemma2-9b": "google/gemma-2-9b-it",                # gated
 }
-READER = "Qwen/Qwen2.5-3B-Instruct"  # the main reader of the development runs; keep it out of MODELS
-READERS2 = {"phi3.5-mini": "microsoft/Phi-3.5-mini-instruct",  # the development runs' second reader
-            "phi-4": "microsoft/phi-4"}                         # a 14B reader of the same family
-READER_ITEMS_PER_CELL = {"phi-4": 10}  # phi-4 scores the answers to 10 items per cell (+ the annotation sample)
-JUDGES = {"phi-4": "microsoft/phi-4"}  # LLM judge baseline: the same model as the big reader
-SELECTIVE = {"qwen2.5-3b": "Qwen/Qwen2.5-3B-Instruct"}  # Selective Context baseline: the main reader's model
+READER = "Qwen/Qwen2.5-3B-Instruct"  # the main reader of the development runs; not an evaluated model
+READERS2 = {"phi4-mini": "microsoft/Phi-4-mini-instruct",  # the second reader
+            "qwen2.5-14b": "Qwen/Qwen2.5-14B-Instruct"}    # the large reader
+READER_ITEMS_PER_CELL = {"qwen2.5-14b": 10}  # it scores the answers to 10 items per cell (+ the annotation sample)
+JUDGES = {"qwen2.5-14b": "Qwen/Qwen2.5-14B-Instruct"}   # LLM judge: the same model as the large reader
+SELECTIVE = {"qwen2.5-3b": "Qwen/Qwen2.5-3B-Instruct"}  # Selective Context: the main reader's model
+LOCAL = {}                           # Hugging Face id → local model folder, e.g. {"Qwen/Qwen2.5-3B-Instruct":
+                                     # "/models/Qwen2.5-3B-Instruct"}; every model local: no hub calls
 N_PER_CELL_SYNTHETIC = 30            # 15 cells → 450 items
-N_PER_CELL_REAL = 30                 # 21 cells → up to 630 items (Poddar et al.'s cells come out smaller)
+N_PER_CELL_REAL = 30                 # 18 cells → 540 items
+REAL_CHECK_N = 8                     # planted filler in real texts (R3): items per cell
 SEED = 1                             # the development runs used 0
-ANNOTATION_ITEMS = 6                 # items per source (synthetic, SQuAD, MuSiQue, CUAD) …
-ANNOTATION_PER_ITEM = 8              # … × answers per item ≈ 190 answers to label
+ANNOTATION_ITEMS = 8                 # items per source (synthetic, SQuAD, MuSiQue, CUAD) …
+ANNOTATION_PER_ITEM = 6              # … × answers per item ≈ 190 answers to label
 ABSTAIN_N = 150                      # answers to missing-fact items for held-out labels of the abstention rule
-FREE_MODEL_CACHE = True              # delete each evaluated model's download after use: ~75 GB of disk instead of
-                                     # ~140 GB, at the cost of downloading the models again for the second suite
-DTYPE = "bf16"
+DTYPE = "bf16"                       # evaluated models, the other readers, the judge, Selective Context
+READER_DTYPE = "fp16"                # the main reader, as in the development runs
 BATCH = 32                           # generation batch (halved automatically on out-of-memory)
 MAX_NEW_TOKENS = 400
-USE_DRIVE = True                     # keep the run in Google Drive (survives disconnects)
-RUN_ROOT = "/content/drybench_runs"  # used when USE_DRIVE = False
+GPU = None                           # a server with several GPUs: the one to use, e.g. "0"
+PIP = False                          # True (Colab): install what is missing; False: install nothing
+FREE_MODEL_CACHE = False             # Colab: True deletes each downloaded evaluated model after use (~75 GB of
+                                     # disk instead of ~100 GB; the models are downloaded again for the 2nd suite)
 # ---- end settings ----
 
 import base64
@@ -74,9 +78,19 @@ def install():
     pkg = (base / f"drybench_pkg_{digest}").resolve()
     if not (pkg / ".installed").exists():
         zipfile.ZipFile(io.BytesIO(base64.b64decode(PKG_B64))).extractall(pkg)
-        run([sys.executable, "-m", "pip", "install", "-q", str(pkg), "transformers>=4.46", "accelerate",
-             "matplotlib", "gdown"])
+        try:
+            if not PIP:
+                raise RuntimeError("PIP = False")
+            run([sys.executable, "-m", "pip", "install", "-q", "--retries", "1", "--timeout", "20", str(pkg),
+                 "transformers>=4.46", "accelerate", "matplotlib", "gdown"])
+        except RuntimeError as e:  # nothing installed: the libraries this machine has, the package from its folder
+            have = subprocess.run([sys.executable, "-c", "import numpy, pandas, scipy, torch, transformers"],
+                                  capture_output=True, text=True, env=ENV)
+            if have.returncode:
+                raise SystemExit(f"Not installed ({e}), and a library is missing:\n" + have.stderr[-800:])
+            print("nothing installed: the package runs from", pkg)
         (pkg / ".installed").touch()
+    ENV["PYTHONPATH"] = os.pathsep.join([str(pkg)] + [p for p in [os.environ.get("PYTHONPATH")] if p])
     return pkg
 
 
@@ -87,10 +101,12 @@ def hf_token():
         tok = userdata.get("HF_TOKEN")
         if tok:
             ENV["HF_TOKEN"] = tok
-            return True
     except Exception:
-        pass
-    return False
+        pass  # a server: HF_TOKEN from the environment, if set
+
+
+def model(mid):
+    return os.path.expanduser(LOCAL.get(mid, mid))
 
 
 def main():
@@ -101,34 +117,44 @@ def main():
         drive.mount("/content/drive")
         root = Path("/content/drive/MyDrive/drybench_runs")
     else:
-        root = Path(RUN_ROOT)
+        root = Path(RUN_ROOT).expanduser()
     root.mkdir(parents=True, exist_ok=True)
     out = root / RUN_NAME
-    missing = [p for p in DEV_ITEMS if not Path(p).exists()]
+    dev = [root / Path(p).expanduser() for p in DEV_ITEMS]  # an absolute path stays as it is
+    missing = [str(p) for p in dev if not p.exists()]
     if missing:
-        raise SystemExit("Development items not found (restore the development run to Drive or fix DEV_ITEMS): "
+        raise SystemExit("Development items not found (copy the development run into RUN_ROOT, or fix DEV_ITEMS): "
                          + ", ".join(missing))
-    free = shutil.disk_usage("/content" if Path("/content").exists() else ".").free / 1e9
-    need = 75 if FREE_MODEL_CACHE else 140
-    advice = "drop a large model" if FREE_MODEL_CACHE else "set FREE_MODEL_CACHE = True or drop a large model"
-    print(f"Free disk: {free:.0f} GB" + (f"  ← the models need ~{need} GB at a time: {advice}"
-                                          if free < need + 10 else ""))
-    gated = [m for m in MODELS.values() if m.startswith(("meta-llama/", "google/"))]
-    if not hf_token() and gated:
-        raise SystemExit("No HF_TOKEN in Colab secrets, but MODELS has gated models: " + ", ".join(gated))
+    if GPU is not None:
+        ENV["CUDA_VISIBLE_DEVICES"] = str(GPU)
+    ids = [model(m) for m in [*MODELS.values(), READER, *READERS2.values(), *JUDGES.values(), *SELECTIVE.values()]]
+    hub = sorted({m for m in ids if not Path(m).is_dir()})
+    if hub:
+        hf_token()
+        gated = [m for m in hub if m.startswith(("meta-llama/", "google/"))]
+        if gated and not ENV.get("HF_TOKEN"):
+            raise SystemExit("No HF_TOKEN (Colab secrets or the environment), but these models are gated: "
+                             + ", ".join(gated) + ". Or give their local folders in LOCAL.")
+        free = shutil.disk_usage(root).free / 1e9
+        need = 75 if FREE_MODEL_CACHE else 100
+        print(f"Downloaded from the Hugging Face hub: {', '.join(hub)}. Free disk: {free:.0f} GB"
+              + (f"  ← the models need ~{need} GB" if free < need + 10 else ""))
+    else:
+        print("Every model is a local folder: nothing is downloaded.")
     pkg = install()
 
     def pairs(d):
-        return [f"{k}={v}" for k, v in d.items()]
+        return [f"{k}={model(v)}" for k, v in d.items()]
 
-    dev_items = [pkg / "results" / "dev_v1.0" / "real" / "items.jsonl", *DEV_ITEMS]
     cmd = [sys.executable, pkg / "scripts" / "run_final.py", "--run", out, "--data", root / "data",
-           "--dev-items", *dev_items, "--models", *pairs(MODELS), "--reader", READER,
-           "--readers2", *pairs(READERS2), "--reader-items-per-cell", *pairs(READER_ITEMS_PER_CELL),
+           "--dev-items", pkg / "results" / "dev_v1.0" / "real" / "items.jsonl", *dev,
+           "--models", *pairs(MODELS), "--reader", model(READER), "--readers2", *pairs(READERS2),
+           "--reader-items-per-cell", *[f"{k}={v}" for k, v in READER_ITEMS_PER_CELL.items()],
            "--judges", *pairs(JUDGES), "--selective", *pairs(SELECTIVE), "--seed", SEED,
            "--n-per-cell-synthetic", N_PER_CELL_SYNTHETIC, "--n-per-cell-real", N_PER_CELL_REAL,
-           "--annotation-items", ANNOTATION_ITEMS, "--annotation-per-item", ANNOTATION_PER_ITEM,
-           "--abstain-n", ABSTAIN_N, "--dtype", DTYPE, "--batch-size", BATCH, "--max-new-tokens", MAX_NEW_TOKENS]
+           "--real-check-n", REAL_CHECK_N, "--annotation-items", ANNOTATION_ITEMS,
+           "--annotation-per-item", ANNOTATION_PER_ITEM, "--abstain-n", ABSTAIN_N, "--dtype", DTYPE,
+           "--reader-dtype", READER_DTYPE, "--batch-size", BATCH, "--max-new-tokens", MAX_NEW_TOKENS]
     run(cmd + (["--free-model-cache"] if FREE_MODEL_CACHE else []))
     try:
         from IPython.display import Markdown, display

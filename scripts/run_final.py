@@ -8,10 +8,14 @@
 Everything was designed and tuned on the development runs (the T4 runs: three models of 0.5–1.7B, synthetic
 items of seed 0, the real-text items in --dev-items, every development run). This run checks the results on
 what those runs did not see: synthetic items of another seed, real-text items built from other source texts (no
-paragraph, MuSiQue question or step, or contract of the development items), and larger models; the code is the
-version recorded in protocol.json at the first start (rerunning with another version stops, see
+paragraph, MuSiQue question or step, or contract of the development items), and other, larger models; the code
+is the version recorded in protocol.json at the first start (rerunning with another version stops, see
 docs/PROTOCOL.md). Poddar et al. is not a suite of this run: the development human-label check used every
 question of it that could be an item.
+
+A model may be a local folder instead of a Hugging Face id. When every model is one, nothing is fetched from the
+hub, and the datasets must already be in --data (squad2/dev-v2.0.json, musique/musique_full_v1.0_dev.jsonl,
+cuad/CUADv1.json); they must be the files the development runs used (their config.json records the sha256).
 
 Steps (rerunning resumes):
   1. synthetic reports  → RUN/synthetic   (scripts/run_synthetic.py)
@@ -39,23 +43,23 @@ sys.path.insert(0, str(REPO))  # protocol.json records the package these scripts
 
 import run_real as rr  # noqa: E402
 
-DEFAULT_MODELS = [
-    "qwen2.5-0.5b=Qwen/Qwen2.5-0.5B-Instruct",       # the three development models
-    "qwen2.5-1.5b=Qwen/Qwen2.5-1.5B-Instruct",
-    "smollm2-1.7b=HuggingFaceTB/SmolLM2-1.7B-Instruct",
-    "qwen2.5-7b=Qwen/Qwen2.5-7B-Instruct",           # one family across sizes
+DEFAULT_MODELS = [                                    # three families, 3–14B; none of them is the main reader
+    "llama3.2-3b=meta-llama/Llama-3.2-3B-Instruct",  # gated: HF_TOKEN
+    "phi4-mini=microsoft/Phi-4-mini-instruct",
     "qwen2.5-14b=Qwen/Qwen2.5-14B-Instruct",
-    "llama3.1-8b=meta-llama/Llama-3.1-8B-Instruct",  # gated: HF_TOKEN
-    "gemma2-9b=google/gemma-2-9b-it",                # gated: HF_TOKEN
 ]
-DEFAULT_READERS2 = ["phi3.5-mini=microsoft/Phi-3.5-mini-instruct", "phi-4=microsoft/phi-4"]
-DEFAULT_JUDGES = ["phi-4=microsoft/phi-4"]
+# the second and the large reader; both are also evaluated models (their scores of their own answers are secondary)
+DEFAULT_READERS2 = ["phi4-mini=microsoft/Phi-4-mini-instruct", "qwen2.5-14b=Qwen/Qwen2.5-14B-Instruct"]
+DEFAULT_JUDGES = ["qwen2.5-14b=Qwen/Qwen2.5-14B-Instruct"]
 DEFAULT_SELECTIVE = ["qwen2.5-3b=Qwen/Qwen2.5-3B-Instruct"]
 # Poddar et al. is left out: every question usable as an item was used by the development human-label check
 DEFAULT_SUITES = ["squad2", "musique", "cuad"]
+DATA_FILES = {"squad2": "squad2/dev-v2.0.json", "musique": "musique/musique_full_v1.0_dev.jsonl",
+              "cuad": "cuad/CUADv1.json"}
 PROTOCOL_KEYS = ("version", "code", "scoring", "signals", "seed", "filler_check_seed", "n_per_cell_synthetic",
-                 "n_per_cell_real", "reader", "readers2", "reader_items_per_cell", "models", "variants", "judges",
-                 "selective", "suites", "max_new_tokens", "dtype", "dev_items_sha256", "annotation", "abstain_n")
+                 "n_per_cell_real", "real_check_n", "reader", "readers2", "reader_items_per_cell", "models",
+                 "variants", "judges", "selective", "suites", "max_new_tokens", "dtype", "reader_dtype",
+                 "dev_items_sha256", "annotation", "abstain_n")
 # the code that runs: the package and the scripts of a run, the same files in the repository and in the Colab
 # notebook (scripts/make_colab.py ships them), so both give the same hash
 CODE_SCRIPTS = ("scripts/run_final.py", "scripts/run_real.py", "scripts/run_synthetic.py",
@@ -83,21 +87,62 @@ def file_sha256(path: str | Path) -> str:
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+def is_local(model_id: str) -> bool:
+    """A model given as a folder (absolute, relative or ~), not as a Hugging Face id."""
+    return Path(model_id).expanduser().is_dir() or model_id.startswith(("/", "~", "./", "../"))
+
+
 def preflight(ids: list[str]) -> None:
-    """Every model can be downloaded with this token (gated models fail here, not after hours)."""
+    """Every local model folder has its config.json; every hub model can be downloaded with this token (gated
+    models fail here, not after hours)."""
+    bad, hub = [], []
+    for mid in sorted(set(ids)):
+        if is_local(mid):
+            if not (Path(mid).expanduser() / "config.json").exists():
+                bad.append(f"{mid} (no config.json)")
+        else:
+            hub.append(mid)
     try:
         from huggingface_hub import hf_hub_download
     except ImportError:
-        return
-    bad = []
-    for mid in sorted(set(ids)):
+        hub = []
+    for mid in hub:
         try:
             hf_hub_download(mid, "config.json")
         except Exception as e:  # noqa: BLE001 - report every model that fails
             bad.append(f"{mid} ({type(e).__name__})")
     if bad:
-        raise SystemExit("Cannot download: " + "; ".join(bad) + ". Check HF_TOKEN and the model's access page, or "
-                         "drop the model.")
+        raise SystemExit("Cannot use: " + "; ".join(bad) + ". A local model folder needs its config.json; a hub "
+                         "model needs HF_TOKEN and access to it. Fix the path or drop the model.")
+
+
+def offline(ids: list[str]) -> bool:
+    """Every model a local folder: the run makes no calls to the Hugging Face hub (a server without internet)."""
+    if ids and all(is_local(m) for m in ids):
+        rr.ENV.update(HF_HUB_OFFLINE="1", TRANSFORMERS_OFFLINE="1")
+        return True
+    return False
+
+
+def check_data(data: Path, suites: list[str], dev_items: list[str], need_all: bool) -> None:
+    """The dataset files of the suites are there (need_all: nothing may be downloaded) and are the files the
+    development runs used (sha256 in the config.json next to their items)."""
+    wanted = {DATA_FILES[s] for s in suites if s in DATA_FILES}
+    missing = [str(data / f) for f in sorted(wanted) if not (data / f).exists()]
+    if missing and need_all:
+        raise SystemExit("Datasets not found (nothing is downloaded when every model is a local folder; copy the "
+                         "development runs' data folder): " + ", ".join(missing))
+    differ = []
+    for p in dev_items:
+        cfg = Path(p).parent / "config.json"
+        recorded = json.loads(cfg.read_text()).get("data") or {} if cfg.exists() else {}
+        for path, digest in recorded.items():
+            here = data / Path(*Path(path).parts[-2:])  # e.g. squad2/dev-v2.0.json
+            if here.relative_to(data).as_posix() in wanted and here.exists() and rr.sha256(here) != digest:
+                differ.append(f"{here} (sha256 differs from {cfg})")
+    if differ:
+        raise SystemExit("Not the dataset files of the development runs, so their source texts may not be found "
+                         "and left out: " + "; ".join(differ))
 
 
 def protocol(out: Path, args: argparse.Namespace, write: bool = True) -> dict:
@@ -108,12 +153,13 @@ def protocol(out: Path, args: argparse.Namespace, write: bool = True) -> dict:
 
     cur = {"version": drybench.__version__, "code": code_hash(), "scoring": drybench.SCORING_VERSION,
            "signals": drybench.SIGNALS_VERSION, "seed": args.seed, "filler_check_seed": 2026 + args.seed,
-           "n_per_cell_synthetic": args.n_per_cell_synthetic,
-           "n_per_cell_real": args.n_per_cell_real, "reader": args.reader, "readers2": rr.label_map(args.readers2),
+           "n_per_cell_synthetic": args.n_per_cell_synthetic, "n_per_cell_real": args.n_per_cell_real,
+           "real_check_n": args.real_check_n, "reader": args.reader, "readers2": rr.label_map(args.readers2),
            "reader_items_per_cell": args.reader_items_per_cell, "models": rr.model_map(args.models),
            "variants": args.variants, "judges": rr.label_map(args.judges),
            "selective": rr.label_map(args.selective), "suites": sorted(args.suites),
-           "max_new_tokens": args.max_new_tokens, "dtype": args.dtype, "decoding": "plain greedy",
+           "max_new_tokens": args.max_new_tokens, "dtype": args.dtype, "reader_dtype": args.reader_dtype,
+           "decoding": "plain greedy",
            "dev_items": [str(p) for p in args.dev_items],
            "dev_items_sha256": sorted(file_sha256(p) for p in args.dev_items),
            "annotation": {"sources": args.annotation_sources, "items_per_source": args.annotation_items,
@@ -146,7 +192,7 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--models", nargs="+", default=DEFAULT_MODELS)
     ap.add_argument("--reader", default=rr.READER)
     ap.add_argument("--readers2", nargs="*", default=DEFAULT_READERS2, metavar="LABEL=ID")
-    ap.add_argument("--reader-items-per-cell", nargs="*", default=["phi-4=10"], metavar="LABEL=N",
+    ap.add_argument("--reader-items-per-cell", nargs="*", default=["qwen2.5-14b=10"], metavar="LABEL=N",
                     help="a reader that scores only the answers to the first N items per cell ('' = all)")
     ap.add_argument("--judges", nargs="*", default=DEFAULT_JUDGES, metavar="LABEL=ID")
     ap.add_argument("--selective", nargs="*", default=DEFAULT_SELECTIVE, metavar="LABEL=ID")
@@ -157,14 +203,15 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--suites", nargs="+", default=DEFAULT_SUITES,
                     help="real-text suites (Poddar et al. is not held out: see docs/PROTOCOL.md)")
     ap.add_argument("--filler-check-n", type=int, default=5)
-    ap.add_argument("--real-check-n", type=int, default=4)
-    ap.add_argument("--dtype", default="bf16")
+    ap.add_argument("--real-check-n", type=int, default=8, help="R3: real items per cell (development: 4)")
+    ap.add_argument("--dtype", default="bf16", help="the evaluated models, the other readers, judge, Selective Context")
+    ap.add_argument("--reader-dtype", default="fp16", help="the main reader (the development runs read in fp16)")
     ap.add_argument("--batch-size", type=int, default=32)
     ap.add_argument("--max-new-tokens", type=int, default=400)
     ap.add_argument("--reader-max-batch-tokens", type=int, default=8192)
     ap.add_argument("--annotation-sources", nargs="+", default=["synthetic", "squad2", "musique", "cuad"])
-    ap.add_argument("--annotation-items", type=int, default=6, help="items per source")
-    ap.add_argument("--annotation-per-item", type=int, default=8, help="answers per item")
+    ap.add_argument("--annotation-items", type=int, default=8, help="items per source")
+    ap.add_argument("--annotation-per-item", type=int, default=6, help="answers per item")
     ap.add_argument("--annotation-min-distinct", type=int, default=3, help="items need this many distinct answers")
     ap.add_argument("--abstain-n", type=int, default=150)
     ap.add_argument("--skip", nargs="*", default=[], choices=["synthetic", "real", "annotation"])
@@ -193,16 +240,23 @@ def main(argv: list[str] | None = None) -> None:
         raise SystemExit("development items not found: " + ", ".join(missing))
     out.mkdir(parents=True, exist_ok=True)
     protocol(out, args, write=False)  # a rerun with other settings stops here, before any download
+    data = Path(args.data) if args.data else out.parent / "data"
     if args.backend == "hf":
-        preflight([v.split("=", 1)[1] for v in args.models + args.readers2 + args.judges + args.selective]
-                  + [args.reader])
+        ids = [v.split("=", 1)[1] for v in args.models + args.readers2 + args.judges + args.selective] + [args.reader]
+        preflight(ids)
+        local = offline(ids)
+        if local:
+            print("Every model is a local folder: nothing is fetched from the Hugging Face hub.")
+        if "real" not in args.skip:
+            check_data(data, args.suites, args.dev_items, need_all=local)
     proto = protocol(out, args)
     rr.write_hardware(out)
     print(f"Confirmation run {out.resolve()} — package v{proto['version']} (code {proto['code']}, scoring "
           f"{proto['scoring']})")
     subset = [s for s in args.reader_items_per_cell if s]
     shared = ["--models", *args.models, "--reader", args.reader, "--readers2", *args.readers2,
-              "--variants", *args.variants, "--dtype", args.dtype, "--batch-size", args.batch_size,
+              "--variants", *args.variants, "--dtype", args.dtype, "--reader-dtype", args.reader_dtype,
+              "--batch-size", args.batch_size,
               "--max-new-tokens", args.max_new_tokens, "--reader-max-batch-tokens", args.reader_max_batch_tokens,
               "--missing-check", "--backend", args.backend]
     shared += (["--reader-items-per-cell", *subset] if subset else [])
@@ -218,7 +272,7 @@ def main(argv: list[str] | None = None) -> None:
         print("\n======== 2/3 real texts ========")
         # the synthetic planted-filler check is T1 of the synthetic suite: not repeated here (R2)
         rr.run([sys.executable, REPO / "scripts" / "run_real.py", "--run", out / "real",
-                "--data", args.data or out.parent / "data", "--suites", *args.suites,
+                "--data", data, "--suites", *args.suites,
                 "--n-per-cell", args.n_per_cell_real, "--seed", args.seed, "--real-check-n", args.real_check_n,
                 "--filler-check-n", 0, "--exclude-items", *args.dev_items, "--require-musique-full",
                 "--no-human-check"] + shared)

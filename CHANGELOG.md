@@ -2,6 +2,27 @@
 
 A change of the scoring version makes a resumed run recompute its scores ([running](docs/running.md#rescoring)).
 
+## 1.2.5 (scoring version 11)
+
+The confirmation run on one A100 40 GB server with local model folders; no score changes.
+- Lineup (`scripts/run_final.py`, `colab/final_a100.ipynb`, [PROTOCOL.md](docs/PROTOCOL.md)): evaluated models
+  Llama-3.2-3B-Instruct, Phi-4-mini-instruct, Qwen2.5-14B-Instruct; readers Qwen2.5-3B (main), Phi-4-mini,
+  Qwen2.5-14B (answers to 10 items per cell); judge Qwen2.5-14B; R3 on 8 items per cell; annotation sample of 8
+  items per source with up to 6 answers each.
+- `drybench confirm`: H1 thresholds per truth set (`H1_NULLS`): T1 5% and 0.95; R3 15% and 0.85, the main reader's
+  development 95% CI bounds rounded outward by the rule fixed before the intervals were computed.
+- `--reader-dtype` (`run_final.py`, `run_real.py`, `run_synthetic.py`): the main reader's dtype. The confirmation
+  run reads in fp16, as the development runs did on a T4; models, the other readers, judge and Selective Context
+  in bf16.
+- `run_final.py` takes local model folders: checked for a config.json instead of downloaded; with every model local
+  nothing is fetched from the hub, the datasets must be in `--data`, and they must be the development runs' files
+  (sha256 in their config.json). `--free-model-cache` never touches a local folder.
+- `scripts/compare_reader.py`: a reader against a run's scores on a sample of its responses (status, kept
+  fragments, W, information per fact), per dtype.
+- `colab/final_a100.ipynb` and `colab/dev_baselines_a100.ipynb` default to a server: `RUN_ROOT`, `LOCAL` (Hugging
+  Face id → local folder), `PIP = False`. The development notebook also describes the local model folders
+  (`models.jsonl`) and compares the main reader with the development scores (`reader_equivalence/`).
+
 ## 1.2.4 (scoring version 11)
 
 Loading only; no score changes (`drybench/backends/hf.py`, `cli.py`, `scripts/probe_models.py`).

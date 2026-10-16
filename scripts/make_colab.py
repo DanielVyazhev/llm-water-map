@@ -28,6 +28,7 @@ sys.path.insert(0, str(ROOT))  # the version stamped on the notebooks is the pac
 PACKAGED = ["LICENSE", "pyproject.toml", "README.md", "scripts/pilot_validation.py", "scripts/run_real.py",
             "scripts/run_synthetic.py", "scripts/run_final.py", "scripts/show_checks.py", "scripts/trace_response.py",
             "scripts/chat_annotators.py", "scripts/check_abstain.py", "scripts/probe_models.py",
+            "scripts/compare_reader.py", "scripts/r3_losses.py",
             "annotation/dry_span_labels_offline.html", "docs/ANNOTATION.md", "docs/PROTOCOL.md",
             "results/abstain_labels.json"]
 ZIP_DATE = (2020, 1, 1, 0, 0, 0)
@@ -201,21 +202,26 @@ def missing_notebook(cell: str) -> dict:
     }
 
 
-FINAL_DOWNLOAD = """# Download the samples for the human labels (and, if needed, the whole run) as zip files.
-from google.colab import files
+FINAL_DOWNLOAD = """# The samples for the human labels and the whole run as zip files.
+out = (Path("/content/drive/MyDrive/drybench_runs") if USE_DRIVE else Path(RUN_ROOT).expanduser()) / RUN_NAME
+try:
+    from google.colab import files
 
-out = (Path("/content/drive/MyDrive/drybench_runs") if USE_DRIVE else Path(RUN_ROOT)) / RUN_NAME
-files.download(f"{out}_annotation.zip")
-# files.download(f"{out}.zip")  # the whole run (large)
+    files.download(f"{out}_annotation.zip")
+    # files.download(f"{out}.zip")  # the whole run (large)
+except ImportError:  # a server: the zips are on its disk
+    print("For the annotators:", f"{out}_annotation.zip")
+    print("Whole run:", f"{out}.zip")
 """
 
 
 def final_notebook(cell: str) -> dict:
     intro = ("# Filler in LLM answers: the confirmation run (A100)\n"
-             "One frozen version of the code (see `docs/PROTOCOL.md` in the package), new items, seven models, "
+             "One frozen version of the code (see `docs/PROTOCOL.md` in the package), new items, three models, "
              "three readers, every check, the LLM judge and Selective Context, and the samples for human labels. "
-             "Runtime → Change runtime type → **A100 GPU**; put `HF_TOKEN` into the Colab secrets; run *Package* "
-             "(the code, hidden) and the main cell. Rerunning resumes from Google Drive.")
+             "Set `RUN_ROOT` and `LOCAL` (a server with local model folders) at the top of the main cell, then run "
+             "*Package* (the code, hidden) and the main cell; rerunning resumes. On Colab: an A100 runtime, "
+             "`USE_DRIVE = True`, `PIP = True`, `HF_TOKEN` in the Colab secrets.")
     return {
         "nbformat": 4, "nbformat_minor": 0,
         "metadata": {"accelerator": "GPU", "colab": {"gpuType": "A100", "machine_shape": "hm", "provenance": []},
@@ -238,12 +244,14 @@ except ImportError:  # a server: the zip is on its disk
 
 
 def dev_baselines_notebook(cell: str) -> dict:
-    intro = ("# Filler in LLM answers: the LLM judge and Selective Context on the development runs (A100)\n"
-             "After the T4 development runs of this package version (synthetic reports and real texts, both in "
-             "Google Drive): Runtime → Change runtime type → **A100 GPU**, run *Package* (the code, hidden) and the "
-             "main cell, or Runtime → **Run all**. It adds the judge (Phi-4) and Selective Context (Qwen2.5-3B) to "
-             "both runs, remakes their tables and writes the development values of the confirmatory tests "
-             "(`docs/PROTOCOL.md`).")
+    intro = ("# Filler in LLM answers: the development runs on the confirmation run's machine (A100)\n"
+             "After the T4 development runs of this package version (synthetic reports and real texts): set "
+             "`RUN_ROOT` (the folder with both runs) and `LOCAL` (local model folders) at the top of the main cell, "
+             "run *Package* (the code, hidden) and the main cell. It describes the local models, scores a sample "
+             "of both runs' responses again with the main reader and compares, adds the judge (Qwen2.5-14B) and "
+             "Selective Context (Qwen2.5-3B) to both runs, remakes their tables and writes the development values "
+             "of the confirmatory tests (`docs/PROTOCOL.md`). On Colab: an A100 runtime, `USE_DRIVE = True`, "
+             "`PIP = True`.")
     return {
         "nbformat": 4, "nbformat_minor": 0,
         "metadata": {"accelerator": "GPU", "colab": {"gpuType": "A100", "provenance": []},

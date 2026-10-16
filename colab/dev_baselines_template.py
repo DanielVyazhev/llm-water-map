@@ -1,30 +1,37 @@
-# Filler in LLM answers — the LLM judge and Selective Context on the development runs (Colab A100, package v__VERSION__)
-# 1) Runtime → Change runtime type → A100 GPU.   2) The two development runs of this package version in Google
-#    Drive (drybench_runs/<SYN_RUN>, drybench_runs/<REAL_RUN>), made with the T4 notebooks.   3) Run this cell.
-# Writes RUN/baselines/<method>-<label>/<set>.jsonl into each run (planted filler in synthetic reports; planted
-# filler in real texts and Poddar et al.'s human labels), remakes the runs' tables, writes the development values
-# of the confirmatory tests (docs/PROTOCOL.md) and zips everything into drybench_runs/<ZIP_NAME>.zip. About 1–2 h;
-# rerunning resumes. The package is embedded as PKG_B64 (notebook: the hidden cell "Package"); nothing to upload.
-# On a server instead of Colab: USE_DRIVE = False, RUN_ROOT = the folder with both runs, and JUDGES / SELECTIVE may
-# name local model folders (then nothing is fetched from the Hugging Face hub); without internet the package runs
-# from its folder with the libraries the server has (numpy, pandas, scipy, torch, transformers).
+# Filler in LLM answers — the development runs on the confirmation run's machine (an A100 server or Colab A100,
+# package v__VERSION__): the main reader against the runs' scores, the LLM judge and Selective Context.
+# Needs the two development runs of this package version, made with the T4 notebooks: on a server copied into
+# RUN_ROOT, on Colab in Google Drive (USE_DRIVE = True, drybench_runs/<SYN_RUN>, drybench_runs/<REAL_RUN>).
+# 1. The local model folders in LOCAL described from their configs (origin, size): RUN_ROOT/models.jsonl.
+# 2. READER scores COMPARE_N responses of each run again in each of COMPARE_DTYPES, against the runs' scores
+#    (scripts/compare_reader.py): RUN_ROOT/reader_equivalence/summary.md.
+# 3. RUN/baselines/<method>-<label>/<set>.jsonl in each run (planted filler in synthetic reports; planted filler in
+#    real texts and Poddar et al.'s human labels), the runs' tables again, the development values of the
+#    confirmatory tests (docs/PROTOCOL.md); everything zipped into RUN_ROOT/<ZIP_NAME>.zip. About 1–2 h; rerunning
+#    resumes. The package is embedded as PKG_B64 (notebook: the hidden cell "Package"); nothing to upload.
+# LOCAL maps Hugging Face ids to local model folders: with every model local nothing is fetched from the hub; with
+# PIP = False nothing is installed (the package runs from its folder with the machine's numpy, pandas, scipy,
+# torch, transformers).
 
 # ---- settings ----
 SYN_RUN = "t4_n20_v12"               # the synthetic development run (T4 notebook drybench_colab.ipynb)
 REAL_RUN = "real_t4_n15_v12"         # the real-text development run (T4 notebook real_texts_colab.ipynb)
-JUDGES = {"phi-4": "microsoft/phi-4"}                   # LLM judge: the confirmation run's 14B reader (a hub id
-                                                        # or a local model folder)
+JUDGES = {"qwen2.5-14b": "Qwen/Qwen2.5-14B-Instruct"}   # LLM judge: the confirmation run's large reader
 SELECTIVE = {"qwen2.5-3b": "Qwen/Qwen2.5-3B-Instruct"}  # Selective Context: the main reader's model
+READER = "Qwen/Qwen2.5-3B-Instruct"  # the main reader of the development runs
+COMPARE_N = 40                       # responses per run it scores again (0: no comparison)
+COMPARE_DTYPES = ["fp16", "bf16"]    # the development runs read in fp16 (T4)
+LOCAL = {}                           # Hugging Face id → local model folder, e.g. {"Qwen/Qwen2.5-3B-Instruct":
+                                     # "/models/Qwen2.5-3B-Instruct"}
 PODDAR_DATA = None                   # Poddar et al.'s data.jsonl: only for human-check rows written before v1.0
-DTYPE = "bf16"
+DTYPE = "bf16"                       # the judge and Selective Context
 MAX_BATCH_TOKENS = 8192
 BACKEND = "hf"                       # "mock": a dry run without models
-ZIP_NAME = "dev_v12_results"         # both runs with the baselines, tables and the confirmatory statistics
-USE_DRIVE = True                     # False on a server: the runs are in RUN_ROOT
-RUN_ROOT = "/content/drybench_runs"  # the folder with SYN_RUN and REAL_RUN when USE_DRIVE = False
+ZIP_NAME = "dev_v12_results"         # both runs with the baselines, tables, statistics, the reader comparison
+USE_DRIVE = False                    # Colab: True, the runs are in Google Drive
+RUN_ROOT = "~/drybench_runs"         # the folder with SYN_RUN and REAL_RUN when USE_DRIVE = False
 GPU = None                           # a server with several GPUs: the one to use, e.g. "1"
-PIP = True                           # False: install nothing; the package runs from its folder with the
-                                     # libraries this machine has
+PIP = False                          # True (Colab): install what is missing; False: install nothing
 # ---- end settings ----
 
 import base64
@@ -76,9 +83,13 @@ def install():
     return pkg
 
 
+def model(mid):
+    return os.path.expanduser(LOCAL.get(mid, mid))
+
+
 def local_models():
     """Every model a local folder: no calls to the Hugging Face hub (a server without internet)."""
-    paths = [os.path.expanduser(m) for m in list(JUDGES.values()) + list(SELECTIVE.values())]
+    paths = [model(m) for m in [*JUDGES.values(), *SELECTIVE.values()] + ([READER] if COMPARE_N else [])]
     if BACKEND == "hf" and paths and all(Path(m).is_dir() for m in paths):
         ENV.update(HF_HUB_OFFLINE="1", TRANSFORMERS_OFFLINE="1")
         print("local models:", ", ".join(paths))
@@ -117,6 +128,18 @@ def main():
     hf_token()
     local_models()
     cli = [sys.executable, "-m", "drybench.cli"]
+    folders = sorted({os.path.expanduser(p) for p in LOCAL.values()})
+    if folders and BACKEND == "hf":
+        print("\n======== the local model folders, from their configs ========")
+        described = root / "models.jsonl"
+        described.unlink(missing_ok=True)
+        run([sys.executable, pkg / "scripts" / "probe_models.py", *folders, "--out", described]
+            + [x for f in folders for x in ("--static", f)])
+    if COMPARE_N:
+        print(f"\n======== the main reader against the runs' scores: {COMPARE_N} responses per run ========")
+        run([sys.executable, pkg / "scripts" / "compare_reader.py", syn, real, "--reader", model(READER),
+             "--dtype", *COMPARE_DTYPES, "--n", COMPARE_N, "--out", root / "reader_equivalence",
+             "--backend", BACKEND, "--max-batch-tokens", MAX_BATCH_TOKENS])
     sets = {syn: ["planted_synthetic"],
             real: ["planted_real"] + (["human_poddar"] if (real / "human_check" / "rows.jsonl").exists() else [])}
     extra = ["--poddar-data", PODDAR_DATA] if PODDAR_DATA else []
@@ -125,7 +148,7 @@ def main():
             for out, names in sets.items():
                 print(f"\n======== {method} {label} on {out.name}: {', '.join(names)} ========")
                 run(cli + ["baselines", "--run", out, "--set", *names, "--method", method, "--label", label,
-                           "--backend", BACKEND, "--model", os.path.expanduser(model_id), "--dtype", DTYPE,
+                           "--backend", BACKEND, "--model", model(model_id), "--dtype", DTYPE,
                            "--max-batch-tokens", MAX_BATCH_TOKENS]
                     + (extra if "human_poddar" in names else []))
     print("\n======== tables ========")
@@ -139,6 +162,10 @@ def main():
     for out in (syn, real):
         shutil.copytree(out, stage / out.name, ignore=shutil.ignore_patterns("*.zip"))
     shutil.copyfile(dev, stage / dev.name)
+    if (root / "models.jsonl").exists():
+        shutil.copyfile(root / "models.jsonl", stage / "models.jsonl")
+    if COMPARE_N and (root / "reader_equivalence").exists():
+        shutil.copytree(root / "reader_equivalence", stage / "reader_equivalence")
     archive = shutil.make_archive(str(root / ZIP_NAME), "zip", root_dir=stage)
     shutil.rmtree(stage, ignore_errors=True)
     try:

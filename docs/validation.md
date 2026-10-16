@@ -123,5 +123,6 @@ without and with them (then all of such a response counts as removable).
 
 ## Second reader
 
-The same responses scored by another reader family (development: Phi-3.5-mini; confirmation: also Phi-4). Reported:
-Spearman per response, Kendall τ of the model × prompt ranking, agreement per fragment (deleted or kept, Cohen's κ).
+The same responses scored by other readers (development: Phi-3.5-mini; confirmation: Phi-4-mini, another family,
+and Qwen2.5-14B, the main reader's family at 14B). Reported: Spearman per response, Kendall τ of the model × prompt
+ranking, agreement per fragment (deleted or kept, Cohen's κ).

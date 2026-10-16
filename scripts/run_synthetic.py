@@ -49,6 +49,8 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--reader-items-per-cell", nargs="*", default=[], metavar="LABEL=N")
     ap.add_argument("--variants", nargs="+", default=["default", "concise"], choices=["default", "concise"])
     ap.add_argument("--dtype", default="bf16", help="bf16 on A100/H100; fp16 on T4/V100")
+    ap.add_argument("--reader-dtype", default=None,
+                    help="the main reader's dtype (default: --dtype); the development runs read in fp16")
     ap.add_argument("--batch-size", type=int, default=32)
     ap.add_argument("--max-new-tokens", type=int, default=400)
     ap.add_argument("--reader-max-batch-tokens", type=int, default=8192)
@@ -76,6 +78,7 @@ def main(argv: list[str] | None = None) -> None:
     if not gpu and not args.allow_cpu and args.backend == "hf":
         raise SystemExit("No GPU visible to torch (check CUDA_VISIBLE_DEVICES); --allow-cpu to force.")
     dtype = args.dtype if gpu else "auto"
+    rdtype = (args.reader_dtype or args.dtype) if gpu else "auto"  # the main reader
     models, extra = rr.model_map(args.models), rr.label_map(args.readers2)
     subset = {k: int(v) for k, v in rr.label_map(args.reader_items_per_cell).items()}
     judges, selective = rr.label_map(args.judges), rr.label_map(args.selective)
@@ -98,8 +101,11 @@ def main(argv: list[str] | None = None) -> None:
     rr.check_versions(out, args.reader, extra, seed=args.seed)
     items, resp, signals = out / "items.jsonl", out / "responses.jsonl", out / "signals.jsonl"
     template = ["--chat-template-kwargs", json.dumps({"enable_thinking": False})] if args.no_thinking else []
-    common = ["--reader-backend", args.backend, "--reader-dtype", dtype,
-              "--reader-max-batch-tokens", args.reader_max_batch_tokens]
+    dtypes = {"main": rdtype}
+
+    def common(label: str) -> list:
+        return ["--reader-backend", args.backend, "--reader-dtype", dtypes.get(label, dtype),
+                "--reader-max-batch-tokens", args.reader_max_batch_tokens]
 
     print("\n[1/7] items")
     if not items.exists():
@@ -112,8 +118,8 @@ def main(argv: list[str] | None = None) -> None:
         sub.mkdir(exist_ok=True)
         if not (sub / "reader_check.json").exists():
             rr.run(rr.CLI + ["check-reader", "--items", items, "--reader", model_id, "--n", 40,
-                             "--out", sub / "reader_check.json"] + common)
-        rr.filler_check(args, model_id, sub / "filler_check", dtype)
+                             "--out", sub / "reader_check.json"] + common(label))
+        rr.filler_check(args, model_id, sub / "filler_check", dtypes.get(label, dtype))
 
     print("\n[3/7] responses + entropy signals")
     for label, model_id in models.items():
@@ -133,11 +139,12 @@ def main(argv: list[str] | None = None) -> None:
             answers = rr.subset_responses(items, resp, sub / "responses_scored.jsonl", subset[label], cell_of)
             print(f"    reader {label} scores the answers to the first {subset[label]} items per cell")
         rr.run(rr.CLI + ["score", "--items", items, "--responses", answers, "--out", sub / "scored.jsonl",
-                         "--reader", model_id, "--mode", "loo", "--ablation-abs-tol", 2.0] + common)
+                         "--reader", model_id, "--mode", "loo", "--ablation-abs-tol", 2.0] + common(label))
 
     print("\n[5/7] how each reader reads a missing fact; baselines")
     if args.missing_check:
-        rr.missing_checks(out, {lab: mid for lab, (mid, _) in readers.items()}, args.backend, dtype)
+        for lab, (mid, _) in readers.items():
+            rr.missing_checks(out, {lab: mid}, args.backend, dtypes.get(lab, dtype))
     if judges or selective:
         rr.run_baselines(out, ["planted_synthetic"], judges, selective, args.backend, dtype,
                          args.reader_max_batch_tokens)
