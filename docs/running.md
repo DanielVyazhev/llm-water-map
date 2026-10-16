@@ -113,7 +113,11 @@ SQuAD 2.0 items and decoding, so the development runs are made again under new n
 4. Compare with `results/dev_v1.0`; check `added_answers` in `scored.jsonl`, above all wordings with a comma, a
    bracket, "not" or "or" before the answer, and very short ones.
 5. The development values and the thresholds of H1 into
-   [PROTOCOL.md](PROTOCOL.md#fixed-before-the-confirmation-run), then `colab/final_a100.ipynb`.
+   [PROTOCOL.md](PROTOCOL.md#fixed-before-the-confirmation-run), then `colab/final_a100.ipynb`. H1 on R3 (decided
+   before the development intervals of v1.2.1 were computed, after its point values showed a fact lost in 9.2% of
+   the responses): the truth stays strict; the thresholds are the main reader's development 95% CI bounds rounded
+   outward, the share of responses with a lost fact up to a multiple of 5 points and the precision down to a
+   multiple of 0.05; the confirmation run's R3 has 8 items per cell instead of 4. H1 on T1 keeps 5% and 0.95.
 
 ## Looking inside a run
 
