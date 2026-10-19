@@ -140,9 +140,9 @@ come back and it goes, if every delivered fact stays within the tolerance; resto
 needed then go again, the latest first.
 
 Costs are rounded to steps of 0.1% of I(y); equal steps count as equal. Messages read per response: n + 1 for the
-costs, then one per prefix of the queue in each round, O(n²) in the worst case, then the first-statement pass;
-each message is read once per fact (development runs: about 4.5 messages on average, at most 57). `--mode loo` is the default of every run;
-`--mode greedy` (exact greedy, O(n²)) is kept as an option.
+costs, then one per prefix of the queue in each round, O(n²) in the worst case, then the first-statement pass; each
+message is read once per fact (v1.2 development runs: about 3.2 messages on average, at most 58). `--mode loo` is the
+default of every run; `--mode greedy` (exact greedy, O(n²)) is kept as an option.
 
 ## Kind of a deleted fragment
 

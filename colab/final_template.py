@@ -3,19 +3,19 @@
 # known, the LLM judge and Selective Context, and the two samples for human labels; about 6–10 h on one A100 40 GB.
 # Rerunning the cell resumes. The code is frozen: the run records the package version and a hash of its code in
 # protocol.json and refuses other code or settings (docs/PROTOCOL.md).
-# A server: RUN_ROOT holds the development run real_t4_n15_v12 and the datasets (data/squad2, data/musique,
-# data/cuad); LOCAL maps every model to its folder, and then nothing is downloaded; PIP = False installs nothing (the
-# package runs from its folder with the machine's numpy, pandas, scipy, torch, transformers).
+# A server: RUN_ROOT holds the datasets (data/squad2, data/musique, data/cuad); LOCAL maps every model to its folder,
+# and then nothing is downloaded; PIP = False installs nothing (the package runs from its folder with the machine's
+# numpy, pandas, scipy, torch, transformers).
 # Colab: USE_DRIVE = True, PIP = True, LOCAL = {}, FREE_MODEL_CACHE = True, HF_TOKEN in the Colab secrets (Llama).
 # The package is embedded as PKG_B64 (notebook: the hidden cell "Package"); nothing to upload.
 
 # ---- settings ----
 RUN_NAME = "final_v1"                # new name = fresh run; same name = resume
-RUN_ROOT = "~/drybench_runs"         # the run, the development run and data/ (USE_DRIVE: drybench_runs in Drive)
+RUN_ROOT = "~/drybench_runs"         # the run and data/ (USE_DRIVE: drybench_runs in Google Drive)
 USE_DRIVE = False                    # Colab: True keeps everything in Google Drive (survives disconnects)
-# items of the v1.2 development run on real texts, in RUN_ROOT: their source texts are left out (the v1.0 items
-# come with the package: results/dev_v1.0/real/items.jsonl)
-DEV_ITEMS = ["real_t4_n15_v12/items.jsonl"]
+# the source texts of the development items are left out; both items files come with the package
+# (results/dev_v1.0/real, results/dev_v1.2/real_t4_n15_v12); more items files: paths in RUN_ROOT or absolute
+DEV_ITEMS = []
 MODELS = {                           # label: Hugging Face id of an evaluated (instruct) model
     "llama3.2-3b": "meta-llama/Llama-3.2-3B-Instruct",
     "phi4-mini": "microsoft/Phi-4-mini-instruct",
@@ -123,7 +123,7 @@ def main():
     dev = [root / Path(p).expanduser() for p in DEV_ITEMS]  # an absolute path stays as it is
     missing = [str(p) for p in dev if not p.exists()]
     if missing:
-        raise SystemExit("Development items not found (copy the development run into RUN_ROOT, or fix DEV_ITEMS): "
+        raise SystemExit("Development items not found (fix DEV_ITEMS): "
                          + ", ".join(missing))
     if GPU is not None:
         ENV["CUDA_VISIBLE_DEVICES"] = str(GPU)
@@ -146,8 +146,9 @@ def main():
     def pairs(d):
         return [f"{k}={model(v)}" for k, v in d.items()]
 
+    packaged = [pkg / "results" / f / "items.jsonl" for f in ("dev_v1.0/real", "dev_v1.2/real_t4_n15_v12")]
     cmd = [sys.executable, pkg / "scripts" / "run_final.py", "--run", out, "--data", root / "data",
-           "--dev-items", pkg / "results" / "dev_v1.0" / "real" / "items.jsonl", *dev,
+           "--dev-items", *packaged, *dev,
            "--models", *pairs(MODELS), "--reader", model(READER), "--readers2", *pairs(READERS2),
            "--reader-items-per-cell", *[f"{k}={v}" for k, v in READER_ITEMS_PER_CELL.items()],
            "--judges", *pairs(JUDGES), "--selective", *pairs(SELECTIVE), "--seed", SEED,

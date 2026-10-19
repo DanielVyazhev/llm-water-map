@@ -1,0 +1,38 @@
+{
+ "suites": [
+  "cuad",
+  "musique",
+  "poddar",
+  "squad2"
+ ],
+ "n_per_cell": 15,
+ "oversample": 4,
+ "seed": 0,
+ "distractors": 3,
+ "reader": "Qwen/Qwen2.5-3B-Instruct",
+ "max_prior": 0.05,
+ "min_gold_p": 0.5,
+ "readers2": {
+  "phi-3.5-mini": "microsoft/Phi-3.5-mini-instruct"
+ },
+ "reader_items_per_cell": {},
+ "models": {
+  "qwen2.5-0.5b": "Qwen/Qwen2.5-0.5B-Instruct",
+  "qwen2.5-1.5b": "Qwen/Qwen2.5-1.5B-Instruct",
+  "smollm2-1.7b": "HuggingFaceTB/SmolLM2-1.7B-Instruct"
+ },
+ "variants": [
+  "default",
+  "concise"
+ ],
+ "judges": {},
+ "selective": {},
+ "exclude_items": [],
+ "data": {
+  "/content/drive/MyDrive/drybench_runs/data/squad2/dev-v2.0.json": "80a5225e94905956a6446d296ca1093975c4d3b3260f1d6c8f68bc2ab77182d8",
+  "/content/drive/MyDrive/drybench_runs/data/musique/musique_full_v1.0_dev.jsonl": "8cab31d56a3a1c4ef491b205a8dab3f1ac9c66e472098c6cf1de4e20294f7a4a",
+  "/content/drive/MyDrive/drybench_runs/data/cuad/CUADv1.json": "ed0b77d85bdf4014d7495800e8e4a70565b48ee6f8a2e5dca9cf8655dbf10eae",
+  "/content/drive/MyDrive/drybench_runs/data/poddar/data.jsonl": "13eee8e0c17567b6372c333a44e203719a2231dfc2bc77f15a5464933cd08102"
+ },
+ "musique_full": true
+}

@@ -65,8 +65,11 @@ def test_final_and_dev_notebooks_carry_what_they_need():
     mod = _make_colab()
     final = mod.build_cell(template="final_template.py")
     names = _payload(final).namelist()
-    assert "results/dev_v1.0/real/items.jsonl" in names  # the v1.0 development items, excluded by the run
-    assert 'pkg / "results" / "dev_v1.0" / "real" / "items.jsonl"' in final
+    # both development items files, excluded by the run (v1.2.5: also v1.2's, with its config for the dataset check)
+    for f in ("results/dev_v1.0/real/items.jsonl", "results/dev_v1.2/real_t4_n15_v12/items.jsonl",
+              "results/dev_v1.2/real_t4_n15_v12/config.json"):
+        assert f in names, f
+    assert '("dev_v1.0/real", "dev_v1.2/real_t4_n15_v12")' in final
     dev = mod.build_cell(template="dev_baselines_template.py")
     assert "__PKG_B64__" not in dev and "baselines" in dev and '"confirm"' in dev
     assert "results/dev_v1.0/real/items.jsonl" not in _payload(dev).namelist()

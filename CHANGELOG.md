@@ -21,7 +21,10 @@ The confirmation run on one A100 40 GB server with local model folders; no score
   fragments, W, information per fact), per dtype.
 - `colab/final_a100.ipynb` and `colab/dev_baselines_a100.ipynb` default to a server: `RUN_ROOT`, `LOCAL` (Hugging
   Face id → local folder), `PIP = False`. The development notebook also describes the local model folders
-  (`models.jsonl`) and compares the main reader with the development scores (`reader_equivalence/`).
+  (`models.jsonl`) and compares the main reader with the development scores (`reader_equivalence/`). The
+  confirmation notebook ships both development items files (and the v1.2 run's config.json, for the dataset check).
+- Repository: `results/dev_v1.2` (the v1.2 development runs, tables of v1.2.5); `docs/results.md` and the README
+  chart (`scripts/readme_figure.py`) from them.
 
 ## 1.2.4 (scoring version 11)
 

@@ -21,9 +21,10 @@ flowchart LR
 - Code v1.2.5 (package `drybench`): fixes after a review of v1.1.0 (answer matching, the deletion search keeps the
   first statement of a fact, completeness, segmentation, plain greedy decoding, the truth of the checks, resumable
   runs), and the confirmation run on an A100 server with local models; [CHANGELOG.md](CHANGELOG.md).
-- Results: development runs on a Colab T4 (models up to 1.7B, readers Qwen2.5-3B and Phi-3.5-mini), scored by
-  v1.0.0. Redone with v1.2.1 (`t4_n20_v12`, `real_t4_n15_v12`; values of the confirmatory statistics in
-  [docs/PROTOCOL.md](docs/PROTOCOL.md#development-values)); the LLM judge and Selective Context on them next.
+- Results: development runs v1.2 on a Colab T4 (models up to 1.7B, readers Qwen2.5-3B and Phi-3.5-mini;
+  [results/dev_v1.2](results/dev_v1.2/README.md), [docs/results.md](docs/results.md)); values of the confirmatory
+  statistics in [docs/PROTOCOL.md](docs/PROTOCOL.md#development-values). The LLM judge and Selective Context on them
+  next.
 - Next: the confirmation run on an A100 server (Llama-3.2-3B, Phi-4-mini, Qwen2.5-14B;
   [docs/PROTOCOL.md](docs/PROTOCOL.md)), human labels.
 
@@ -39,19 +40,19 @@ pairwise accuracy and Spearman's correlation with the true filler share ([docs/P
 The responses have known filler. They consist of sentences that state the requested facts (templated on synthetic
 reports, taken from the source text on real texts) and planted filler: openers, closings, hedges, generic remarks,
 restated requests, true but unrequested sentences, summaries. On real texts one condition also plants a wrong
-statement, which counts as removable. Development runs, reader Qwen2.5-3B, v1.0.0 scores.
+statement, which counts as removable. Development runs v1.2, reader Qwen2.5-3B.
 
 - The filler map is right in 84–99% of pairs on every dataset. Left out: responses from which the reader reads no
-  fact (39 of 298 on real texts). Counted as all removable, the filler map is right in 74–83% on real texts.
+  fact (37 of 303 on real texts). Counted as all removable, the filler map is right in 79–90% on real texts.
 - Length works only where the fact sentences are short, so filler is what makes a response long: synthetic reports
-  (median 32 characters) and Poddar et al. (83). On SQuAD 2.0, MuSiQue and CUAD (145–162) it is close to a coin
-  flip (46–58%).
+  (median 32 characters) and Poddar et al. (94). On SQuAD 2.0, MuSiQue and CUAD (144–153) it is close to a coin
+  flip (50–57%).
 - Per fragment (filler or wrong vs needed), ranking fragments by the information lost when each is deleted alone
-  gives ROC-AUC 0.98 on synthetic reports and 0.90–1.00 on real texts. The simple metrics give one number per
+  gives ROC-AUC 1.00 on synthetic reports and 0.87–1.00 on real texts. The simple metrics give one number per
   response and have no per-fragment score.
-- Not in the chart: answers of 10 LLMs labelled by people (Poddar et al.). There length is right in 92% of pairs
-  and the filler map in 88% (95% CI of the difference: −8.5 to −0.2 points). The human labels of the confirmation
-  run decide it ([docs/results.md](docs/results.md)).
+- Not in the chart: answers of 10 LLMs labelled by people (Poddar et al.; 71 responses that state the reference
+  answer). There length is right in 91% of pairs and the filler map in 87% (95% CI of the difference: −10.0 to
+  +0.6 points). The human labels of the confirmation run decide it ([docs/results.md](docs/results.md)).
 
 The chart is rebuilt by `python scripts/readme_figure.py`.
 
@@ -62,13 +63,14 @@ The chart is rebuilt by `python scripts/readme_figure.py`.
 | [docs/method.md](docs/method.md) | reader information, accepted answers, deletion search, kinds of deleted fragments, metrics |
 | [docs/benchmark.md](docs/benchmark.md) | item format, synthetic generator, SQuAD 2.0, MuSiQue, CUAD, Poddar et al., leakage filter |
 | [docs/validation.md](docs/validation.md) | checks with known truth, human labels, baselines, second reader |
-| [docs/results.md](docs/results.md) | development runs: numbers, the v1.0.0 matching issue, open questions |
+| [docs/results.md](docs/results.md) | development runs: numbers, changes since v1.0, open questions |
 | [docs/examples.md](docs/examples.md) | one scored response per suite and one per check |
 | [docs/running.md](docs/running.md) | install, Colab, GPU server, rescoring, inspecting a run |
 | [docs/PROTOCOL.md](docs/PROTOCOL.md) | confirmation run: what is frozen, exclusions, the confirmatory tests |
 | [docs/ANNOTATION.md](docs/ANNOTATION.md) | guide for annotators |
 | [CHANGELOG.md](CHANGELOG.md) | versions |
-| [results/dev_v1.0](results/dev_v1.0/README.md) | tables and raw outputs of the development runs |
+| [results/dev_v1.2](results/dev_v1.2/README.md) | tables and raw outputs of the development runs (v1.2) |
+| [results/dev_v1.0](results/dev_v1.0/README.md) | the same, v1.0 |
 
 ## Layout
 
@@ -78,14 +80,14 @@ scripts/      runs: synthetic suite, real texts, confirmation run, annotation sa
 colab/        notebooks and their templates (scripts/make_colab.py builds the notebooks)
 annotation/   labelling page
 tests/        tests (mock reader, no GPU)
-results/      dev_v1.0: development runs; pilot: GPT-2 pilot; abstain_labels.json: hand labels
+results/      dev_v1.2, dev_v1.0: development runs; pilot: GPT-2 pilot; abstain_labels.json: hand labels
 docs/         documents above
 ```
 
 ## License
 
 Code: MIT ([LICENSE](LICENSE)). Data in `results/`: the licenses of their sources
-([results/dev_v1.0](results/dev_v1.0/README.md#licenses)).
+([results/dev_v1.2](results/dev_v1.2/README.md#licenses), [results/dev_v1.0](results/dev_v1.0/README.md#licenses)).
 
 ## Quick start
 

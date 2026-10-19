@@ -65,8 +65,6 @@ def test_final_cell_on_a_server(tmp_path, monkeypatch, capsys):
     reader in fp16 and the rest in bf16."""
     mc = _load(ROOT / "scripts" / "make_colab.py", "make_colab")
     root = tmp_path / "runs"
-    (root / "real_t4_n15_v12").mkdir(parents=True)
-    (root / "real_t4_n15_v12" / "items.jsonl").write_text("")
     local = {}
     for mid in IDS:
         (tmp_path / "models" / mid.split("/")[1]).mkdir(parents=True)
@@ -103,8 +101,10 @@ def test_final_cell_on_a_server(tmp_path, monkeypatch, capsys):
     assert values("--judges") == [f"qwen2.5-14b={local[IDS[2]]}"]
     assert values("--reader-dtype") == ["fp16"] and values("--dtype") == ["bf16"]
     assert values("--real-check-n") == ["8"] and values("--reader-items-per-cell") == ["qwen2.5-14b=10"]
-    dev = values("--dev-items")
-    assert dev[0].endswith("results/dev_v1.0/real/items.jsonl") and dev[1] == str(root / "real_t4_n15_v12" / "items.jsonl")
+    dev = values("--dev-items")  # both development items files come with the package
+    assert len(dev) == 2 and dev[0].endswith("results/dev_v1.0/real/items.jsonl")
+    assert dev[1].endswith("results/dev_v1.2/real_t4_n15_v12/items.jsonl") and all(Path(d).exists() for d in dev)
+    assert Path(dev[1]).with_name("config.json").exists()  # its datasets' sha256, checked by run_final
     assert values("--data") == [str(root / "data")] and "--free-model-cache" not in cmd
 
 

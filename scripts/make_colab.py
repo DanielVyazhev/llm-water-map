@@ -34,8 +34,10 @@ PACKAGED = ["LICENSE", "pyproject.toml", "README.md", "scripts/pilot_validation.
 ZIP_DATE = (2020, 1, 1, 0, 0, 0)
 
 
-# the confirmation run excludes the source texts of the v1.0 development items: the notebook ships them
-EXTRA = {"final_template.py": ["results/dev_v1.0/real/items.jsonl"]}
+# the confirmation run excludes the source texts of the development items: the notebook ships them (and the v1.2
+# run's config.json, whose dataset sha256 the run checks)
+EXTRA = {"final_template.py": ["results/dev_v1.0/real/items.jsonl", "results/dev_v1.2/real_t4_n15_v12/items.jsonl",
+                               "results/dev_v1.2/real_t4_n15_v12/config.json"]}
 
 
 def package_files(extra: tuple[str, ...] | list[str] = ()) -> list[str]:

@@ -15,8 +15,8 @@ flowchart LR
   SmolLM2-1.7B-Instruct; readers Qwen2.5-3B-Instruct and Phi-3.5-mini-instruct; Poddar et al.'s 189
   human-labelled responses; 600 missing-fact answers labelled while the abstention rule was built.
 - v1.2 (the same design after review; scored by package v1.2.1, scoring version 11, which v1.2.5 keeps):
-  `t4_n20_v12`, `real_t4_n15_v12` on a T4, readers in fp16. Then, on the confirmation run's server
-  (`colab/dev_baselines_a100.ipynb`): the main reader's copy there scores a sample of their responses again
+  `t4_n20_v12`, `real_t4_n15_v12` (`results/dev_v1.2`) on a T4, readers in fp16. Then, on the confirmation run's
+  server (`colab/dev_baselines_a100.ipynb`): the main reader's copy there scores a sample of their responses again
   (`scripts/compare_reader.py`, fp16 and bf16), and the LLM judge (Qwen2.5-14B) and Selective Context (Qwen2.5-3B)
   run on both. Their values of the confirmatory statistics are [below](#development-values).
 
@@ -63,7 +63,7 @@ flowchart TD
 
 | What | Rule | Code |
 |---|---|---|
-| development source texts | no confirmation item uses a SQuAD 2.0 paragraph, a CUAD contract, a MuSiQue question, or a MuSiQue question that shares a single-hop sub-question with an item of either development run (`results/dev_v1.0/real/items.jsonl`, `real_t4_n15_v12/items.jsonl`); the dataset files are those of the development runs (sha256 checked) | `drybench.realdata.source_keys`, `filter-items --exclude-items`, `run_final.check_data` |
+| development source texts | no confirmation item uses a SQuAD 2.0 paragraph, a CUAD contract, a MuSiQue question, or a MuSiQue question that shares a single-hop sub-question with an item of either development run (`results/dev_v1.0/real/items.jsonl`, `results/dev_v1.2/real_t4_n15_v12/items.jsonl`); the dataset files are those of the development runs (sha256 checked) | `drybench.realdata.source_keys`, `filter-items --exclude-items`, `run_final.check_data` |
 | Poddar et al. | not a suite of the confirmation run: the development human-label check used every question of it usable as an item | `run_final.DEFAULT_SUITES` |
 | leaked items | the main reader answers a fact from an empty message (p ≥ 0.05) or cannot read it from the gold answer (p < 0.5) | `drybench.realdata.filter_items` |
 | missing-fact items | out of the filler tables, R3 and H1–H3 (their answers are scored for abstention) | `drybench.rescore.has_missing` |
@@ -159,7 +159,7 @@ Poddar et al. items).
 2. `python scripts/run_final.py --print-hash`: package version and code hash (sha1 of `drybench/` and the four run
    scripts; `protocol.json` records the same and stops a rerun with other code);
 3. sha256 of both development items files (`results/dev_v1.0/real/items.jsonl`:
-   `bbda8f899a2c5ec8abc319f20021f7c3856a610d147f4283ac0434421b02078c`; `real_t4_n15_v12/items.jsonl`:
+   `bbda8f899a2c5ec8abc319f20021f7c3856a610d147f4283ac0434421b02078c`; `results/dev_v1.2/real_t4_n15_v12/items.jsonl`:
    `77358dc937769f9486b0fbb13e7af2195d6c45ad45c8aa874c0a1cf30d9d8ccc`);
 4. the development values of the eight statistics ([above](#development-values)) and the thresholds of H1;
 5. the machine and the models: GPU and library versions (`hardware.json` of the run), each model folder's origin

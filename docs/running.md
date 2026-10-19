@@ -69,7 +69,7 @@ python scripts/run_real.py --run runs/real_v1                          # 4 model
 python scripts/run_real.py --run runs/cuad_only --suites cuad --n-per-cell 30
 python scripts/run_final.py --print-hash                              # version and code hash (PROTOCOL.md)
 python scripts/run_final.py --run runs/final_v1 \
-    --dev-items results/dev_v1.0/real/items.jsonl runs/real_t4_n15_v12/items.jsonl   # confirmation run
+    --dev-items results/dev_v1.0/real/items.jsonl results/dev_v1.2/real_t4_n15_v12/items.jsonl  # confirmation
 python scripts/compare_reader.py runs/t4_n20_v12 runs/real_t4_n15_v12 --reader /models/Qwen2.5-3B-Instruct \
     --dtype fp16 bf16                                                 # a reader against a run's scores
 ```

@@ -2,7 +2,7 @@
 """The confirmation run of the paper: one frozen version of the code, new items, new models, every check.
 
     python scripts/run_final.py --run runs/final_v1 \
-        --dev-items results/dev_v1.0/real/items.jsonl runs/real_t4_n15_v12/items.jsonl [settings]
+        --dev-items results/dev_v1.0/real/items.jsonl results/dev_v1.2/real_t4_n15_v12/items.jsonl [settings]
     python scripts/run_final.py --print-hash      # version and code hash, fixed before the run
 
 Everything was designed and tuned on the development runs (the T4 runs: three models of 0.5–1.7B, synthetic

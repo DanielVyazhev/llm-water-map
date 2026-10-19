@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """The README figure: how often the filler map and the cheap metrics tell which of two responses has more filler,
-per dataset, on the planted-filler checks of the development runs.
+per dataset, on the planted-filler checks of the development runs (v1.2: results/dev_v1.2).
 
     python scripts/readme_figure.py          # → docs/img/filler_vs_baselines.png, prints the numbers
+    python scripts/readme_figure.py --synthetic results/dev_v1.0/synthetic --real results/dev_v1.0/real --out x.png
 
 Pairwise accuracy: over all pairs of responses of one dataset whose true filler shares differ by at least MIN_GAP,
 the share of pairs where the method gives the response with more filler the higher score (ties count half). 50% is
@@ -100,17 +101,15 @@ def fact_chars(sub: Path, folder: str) -> dict[str, list[int]]:
             for r in read_rows(sub / folder / "rows.jsonl")}
 
 
-def numbers(root: Path) -> tuple[list[tuple[str, dict]], dict]:
+def numbers(syn: Path, real: Path) -> tuple[list[tuple[str, dict]], dict]:
     from drybench.compare import cases_for
     from drybench.report import _readers
     from drybench.rescore import has_missing
     from drybench.types import load_items
 
-    syn = root / "synthetic"
     subs, _ = _readers(syn, load_items(syn / "items.jsonl"))
     rows = [("Synthetic reports", dataset(cases_for("planted_synthetic", subs, syn), [l for l, _ in subs],
                                           fact_chars(subs[0][1], "filler_check")))]
-    real = root / "real"
     items = load_items(real / "items.jsonl")
     subs, _ = _readers(real, items)
     labels = [label for label, _ in subs]
@@ -166,10 +165,17 @@ def draw(rows: list[tuple[str, dict]], path: Path) -> None:
     plt.close(fig)
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
+    import argparse
+
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--synthetic", default=str(REPO / "results" / "dev_v1.2" / "t4_n20_v12"))
+    ap.add_argument("--real", default=str(REPO / "results" / "dev_v1.2" / "real_t4_n15_v12"))
+    ap.add_argument("--out", default=str(REPO / "docs" / "img" / "filler_vs_baselines.png"))
+    args = ap.parse_args(argv)
     warnings.filterwarnings("ignore")
-    rows, human = numbers(REPO / "results" / "dev_v1.0")
-    path = REPO / "docs" / "img" / "filler_vs_baselines.png"
+    rows, human = numbers(Path(args.synthetic), Path(args.real))
+    path = Path(args.out)
     draw(rows, path)
     everything = rows + [("Human labels (Poddar et al.)", human)]
     head = " | ".join(label for _, label, _ in METHODS)
@@ -187,7 +193,7 @@ def main() -> None:
         median = f"{r['fact_median']:.0f}" if r["fact_median"] == r["fact_median"] else "–"
         print(f"{name} | {r['responses']} / {r['all']} | {100 * r['filled']['map']:.0f}%, "
               f"{100 * r['filled']['length']:.0f}% | {within} | {100 * lo:+.1f} to {100 * hi:+.1f} | {median}")
-    print(f"written: {path.relative_to(REPO)}")
+    print(f"written: {path}")
 
 
 if __name__ == "__main__":

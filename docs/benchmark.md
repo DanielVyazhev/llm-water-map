@@ -121,8 +121,9 @@ flowchart TD
     G -->|yes| A["Keep, up to n per cell"]
 ```
 
-In the development run every cell kept 15 items except MS MARCO (12 of 17 candidates). The counts of dropped items
-per cell were overwritten by a later top-up of the filter (table R0 shows 0); v1.2 keeps every filter's counts.
+In the v1.2 development run every cell kept 15 items except MS MARCO (12 of 17 candidates). The filter dropped 19
+items whose facts the reader knew and 125 whose gold it could not read, most of them in MuSiQue's cells with "Explain
+how you found it." (18–27 per cell) and SQuAD 2.0's missing-fact cell with one question (16) (table R0).
 
 ## Missing-fact items
 

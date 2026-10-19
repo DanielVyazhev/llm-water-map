@@ -1,0 +1,13 @@
+{
+ "sessions": [
+  {
+   "python": "3.13.15",
+   "drybench": "1.2.1",
+   "gpu": "Tesla T4",
+   "cuda": "13.0",
+   "torch": "2.11.0+cu130",
+   "transformers": "5.18.0",
+   "started": "2026-10-15 20:33:34"
+  }
+ ]
+}
